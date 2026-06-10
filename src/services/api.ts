@@ -25,7 +25,6 @@ import type {
 } from '@/types'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
-const API_KEY = import.meta.env.VITE_API_KEY
 
 export class ApiError extends Error {
   status: number
@@ -35,10 +34,35 @@ export class ApiError extends Error {
   }
 }
 
+// --- Password guard ---------------------------------------------------------
+// The backend gates the data/generation API behind BRAIN_API_KEY. The user types the
+// password on the login screen; we persist it and send it as X-API-Key on every request.
+// The password is never baked into the bundle. A build-time VITE_API_KEY (if set) is the
+// fallback for open local dev.
+const KEY_STORAGE = 'gf_api_key'
+const apiKey = () => localStorage.getItem(KEY_STORAGE) || (import.meta.env.VITE_API_KEY ?? '')
+export const hasApiKey = () => !!localStorage.getItem(KEY_STORAGE)
+export const setApiKey = (k: string) => localStorage.setItem(KEY_STORAGE, k)
+export const clearApiKey = () => localStorage.removeItem(KEY_STORAGE)
+
+/** Validate a candidate password against the backend; persist it only on success. */
+export async function login(password: string): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE}/brain/status`, { headers: { 'x-api-key': password } })
+  } catch {
+    throw new ApiError(0, `Cannot reach the server at ${BASE}.`)
+  }
+  if (res.status === 401) throw new ApiError(401, 'Incorrect password.')
+  if (!res.ok) throw new ApiError(res.status, `Server error (${res.status}).`)
+  setApiKey(password)
+}
+
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) }
   if (init.body) headers['content-type'] = 'application/json'
-  if (API_KEY) headers['x-api-key'] = API_KEY
+  const key = apiKey()
+  if (key) headers['x-api-key'] = key
 
   let res: Response
   try {
@@ -47,6 +71,11 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(0, `Cannot reach the Brain API at ${BASE}. Is the backend running?`)
   }
   if (!res.ok) {
+    // Stored password no longer accepted → bounce back to the login screen.
+    if (res.status === 401) {
+      clearApiKey()
+      window.dispatchEvent(new Event('gf-unauthorized'))
+    }
     let detail = `${res.status} ${res.statusText}`
     try {
       const body = await res.json()

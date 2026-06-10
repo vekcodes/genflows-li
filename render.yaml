@@ -10,6 +10,10 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
+      # --- Password guard: when set, the data/generation API requires this as the password.
+      #     Set in the dashboard (not committed) so it's not public in this repo. ---
+      - key: BRAIN_API_KEY
+        sync: false
       # --- Storage: hosted Postgres (Neon) so the brain persists across restarts/redeploys.
       #     Without this it falls back to an ephemeral SQLite that resets on every deploy. ---
       - key: BRAIN_DATABASE_URL

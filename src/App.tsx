@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import Gate from './components/Gate'
 import { LogoMark } from './components/Logo'
 import Calendar from './pages/Calendar'
 import Dashboard from './pages/Dashboard'
@@ -14,6 +15,7 @@ const NAV = [
 
 export default function App() {
   return (
+    <Gate>
     <BrowserRouter>
       <div className="app">
         <aside className="sidebar">
@@ -58,5 +60,6 @@ export default function App() {
         </main>
       </div>
     </BrowserRouter>
+    </Gate>
   )
 }

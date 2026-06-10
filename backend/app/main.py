@@ -17,7 +17,10 @@ from .db import init_db
 from .scheduler import start_scheduler, stop_scheduler
 from .scrape_queue import resume_pending
 
-PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+# Only the data/generation API is gated by the password. The SPA shell, static assets,
+# /health and /docs stay public so the app can load and prompt for the password client-side.
+# (/cron/* runs its own Bearer-secret auth.)
+GUARDED_API_PREFIXES = ("/sources", "/brain", "/generate", "/assistant", "/content")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -68,9 +71,7 @@ app.add_middleware(
 @app.middleware("http")
 async def api_key_guard(request: Request, call_next):
     key = get_settings().api_key
-    path = request.url.path
-    # /cron/* enforces its own auth (Vercel Cron sends a Bearer CRON_SECRET, not x-api-key).
-    if key and request.method != "OPTIONS" and path not in PUBLIC_PATHS and not path.startswith("/cron/"):
+    if key and request.method != "OPTIONS" and request.url.path.startswith(GUARDED_API_PREFIXES):
         if request.headers.get("x-api-key") != key:
             return JSONResponse({"detail": "invalid or missing API key"}, status_code=401)
     return await call_next(request)
