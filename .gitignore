@@ -15,8 +15,8 @@ dist-ssr
 
 # Env
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 backend/.env
 
 # Databases (the brain lives in Neon Postgres; never commit the local SQLite)

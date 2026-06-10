@@ -30,3 +30,7 @@ anthropic>=0.40,<1.0
 # Local transcript fallback (block-proof): transcribe downloaded audio on-device.
 # Uses CTranslate2 (no torch). Enable with BRAIN_TRANSCRIPT_WHISPER_ENABLED=true.
 faster-whisper>=1.0
+
+# Postgres driver — required when BRAIN_DATABASE_URL points at hosted Postgres
+# (Neon/Supabase) in the cloud. SQLite needs no driver, so this is cloud-only.
+psycopg2-binary>=2.9
