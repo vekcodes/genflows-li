@@ -1,0 +1,35 @@
+# Render Blueprint — one Docker web service serving the API + frontend.
+# Deploy: push this repo to GitHub, then Render → New + → Blueprint → pick the repo.
+# Secrets (sync:false) are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: yt-content-engine
+    runtime: docker
+    plan: free            # free spins down after ~15 min idle (fine for testing); bump to
+                          # "starter" later for always-on + the autonomous scheduler.
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # --- Storage: hosted Postgres (Neon) so the brain persists across restarts/redeploys.
+      #     Without this it falls back to an ephemeral SQLite that resets on every deploy. ---
+      - key: BRAIN_DATABASE_URL
+        sync: false       # paste your Neon postgresql://... string in the dashboard
+      # --- LLM: the Claude subscription CLI can't run in a container, so cloud uses the API. ---
+      - key: BRAIN_LLM_PROVIDER
+        value: anthropic
+      - key: BRAIN_ANTHROPIC_API_KEY
+        sync: false       # paste your sk-ant-... key in the dashboard
+      - key: BRAIN_CLAUDE_MODEL
+        value: claude-opus-4-8
+      # --- Scraping + transcripts via Apify (datacenter IPs are YouTube-blocked; Apify isn't) ---
+      - key: BRAIN_SCRAPE_PROVIDER
+        value: apify
+      - key: BRAIN_APIFY_TOKEN
+        sync: false       # paste your apify_api_... token in the dashboard
+      - key: BRAIN_APIFY_TRANSCRIPT_ACTOR
+        value: codepoetry~youtube-transcript-ai-scraper
+      # --- Cloud-safe toggles ---
+      - key: BRAIN_TRANSCRIPT_WHISPER_ENABLED
+        value: "false"    # no local Whisper in cloud; Apify handles transcripts
+      - key: BRAIN_SCHEDULER_ENABLED
+        value: "false"    # free tier spins down; turn on once you're on an always-on plan

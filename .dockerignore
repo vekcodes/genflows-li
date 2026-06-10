@@ -1,0 +1,25 @@
+# Keep the build context small + don't ship secrets / local junk.
+.git
+node_modules
+dist
+backend/.venv
+**/__pycache__
+**/*.pyc
+*.tsbuildinfo
+backend/_auth_test.db
+backend/_backfill_eric.py
+.obsidian
+*.md
+content-engine.html
+content-engine.canvas
+architecture.excalidraw
+
+# IMPORTANT: do NOT ignore backend/.env contents via here — but .env IS secret, so it is
+# excluded below. Set real secrets in the host's dashboard (Render/Railway env vars).
+backend/.env
+.env
+.env.*
+
+# We DO bake backend/brain.db (current Brain data) into the image so the test deploy has
+# real content. Comment the next line out to ship an empty DB instead.
+# backend/brain.db

@@ -1,0 +1,13 @@
+# Keep the serverless function lean — never upload local state or heavy folders.
+node_modules
+dist
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/brain.db
+backend/rt.db
+backend/_auth_test.db
+*.db
+backend/brain_wiki/wiki
+branding
+.obsidian

@@ -1,0 +1,16 @@
+{
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "backend/brain_wiki/wiki",
+  "attachmentFolderPath": "backend/brain_wiki/wiki",
+  "userIgnoreFilters": [
+    "node_modules/",
+    "dist/",
+    "public/",
+    ".git/",
+    "backend/.venv/",
+    "backend/__pycache__/",
+    "**/__pycache__/",
+    "**/*.tsbuildinfo"
+  ]
+}

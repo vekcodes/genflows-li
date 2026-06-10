@@ -1,0 +1,32 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "build": {
+    "env": {
+      "VITE_API_BASE_URL": "/"
+    }
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(sources|brain|content|generate|assistant|cron|health|docs|redoc|openapi.json)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/(sources|brain|content|generate|assistant|cron|health|docs|redoc)/(.*)",
+      "destination": "/api/index"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/cron/scrape-tick", "schedule": "0 4 * * *" },
+    { "path": "/cron/weekly-content", "schedule": "0 8 * * 1" },
+    { "path": "/cron/daily-rescore", "schedule": "0 6 * * *" }
+  ]
+}

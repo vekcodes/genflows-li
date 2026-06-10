@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Content Engine — pipeline map</title>
+<style>
+  :root { --navy:#0A1F35; --orange:#E67E22; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0e1726; color:#e8eef5; font-family: Manrope, system-ui, Segoe UI, sans-serif; }
+  header { padding:18px 28px; border-bottom:1px solid #1f2d42; }
+  header h1 { margin:0; font-size:18px; }
+  header p { margin:4px 0 0; color:#8aa0bd; font-size:13px; }
+  #stage-wrap { overflow:auto; padding:24px; }
+  #stage { position:relative; }
+  .node { position:absolute; border-radius:12px; padding:12px 14px; font-size:12.5px;
+          line-height:1.4; border:1px solid rgba(255,255,255,.14); background:#16233a;
+          box-shadow:0 6px 18px rgba(0,0,0,.35); overflow:auto; }
+  .node h3 { margin:0 0 6px; font-size:13.5px; }
+  .node b { color:#fff; }
+  svg { position:absolute; left:0; top:0; overflow:visible; pointer-events:none; }
+  .elabel { fill:#cfe0f5; font-size:11px; font-family:inherit; }
+  /* Obsidian preset colors 1..6 */
+  .c1{border-color:#e5534b;background:#2a1a1d}
+  .c2{border-color:#e6913c;background:#2a2118}
+  .c3{border-color:#e6c84c;background:#2a2718}
+  .c4{border-color:#46b96b;background:#15281d}
+  .c5{border-color:#3ca6c4;background:#15252b}
+  .c6{border-color:#9b6cf0;background:#201a2e}
+</style>
+</head>
+<body>
+<header>
+  <h1>YouTube Content Engine — how a script gets made</h1>
+  <p>Scraping only fills the Brain (and only on refresh). Every script is written <b>from the Brain</b> via <code>_build_context()</code>. Scroll to pan.</p>
+</header>
+<div id="stage-wrap"><div id="stage"><svg id="edges"></svg></div></div>
+<script>
+const NODES = [
+  {id:"src",c:6,x:-200,y:-120,w:300,h:120,t:"<h3>1. Watchlist (Sources)</h3>The channels you track. Saved in Settings, table <b>Source</b>."},
+  {id:"profile",c:6,x:-200,y:420,w:300,h:150,t:"<h3>Creator Profile (Settings)</h3>niche · offer/CTA · n_per_week · target_score · duration. Feeds <b>guidance</b> into generation."},
+  {id:"scrape",c:2,x:260,y:-120,w:320,h:190,t:"<h3>2. Scrape — only when refresh=True</h3><b>yt-dlp today / Apify proposed.</b> Views, likes, duration, title, comments. No media. ⚠️ Runs only for the weekly batch; on-command / 'use brain (fast)' skips it."},
+  {id:"brain",c:4,x:720,y:-160,w:320,h:210,t:"<h3>3. THE BRAIN — brain.db</h3>• Videos + Comments (data lake)<br>• Channel baselines (median views)<br>• <b>Virality model</b> (sklearn, ROC-AUC ~0.93) = the numeric GATE<br>• Outliers / trending / velocity"},
+  {id:"wiki",c:4,x:720,y:300,w:320,h:140,t:"<h3>Brain Wiki (markdown, flag OFF)</h3>Karpathy LLM-Wiki: styles, formats, pain-points that compound. Falls back to DB insight tables when off."},
+  {id:"mine",c:2,x:720,y:490,w:320,h:120,t:"<h3>Mine (Claude)</h3>Proven formats + audience pain-points. (Currently EMPTY — click the Dashboard 'Mine' buttons.)"},
+  {id:"ctx",c:5,x:1180,y:-120,w:320,h:230,t:"<h3>4. _build_context() ← KEY STEP</h3>Builds the prompt <b>FROM THE BRAIN</b>, not from a scraped video:<br>• TRENDING NOW<br>• PROVEN TOPICS (outlier titles)<br>• CREATOR STYLE card<br>• PROVEN FORMATS<br>• AUDIENCE PAIN-POINTS<br>• matching transcript excerpts"},
+  {id:"learn",c:1,x:1180,y:420,w:320,h:160,t:"<h3>Learning context (Claude 'RL')</h3>Recent DECLINES (+ your reasons) + what actually PERFORMED when published. Injected into every new generation."},
+  {id:"craft",c:5,x:1640,y:-120,w:300,h:180,t:"<h3>5. refine.craft()</h3>research → score with virality model → if weak, re-research a stronger angle → LOOP until score ≥ target (max 4 tries)."},
+  {id:"script",c:5,x:1640,y:300,w:300,h:150,t:"<h3>6. Write the package</h3>generate_script() → description + booking CTA → thumbnail prompt. All grounded in the same Brain context."},
+  {id:"queue",c:3,x:2080,y:-120,w:300,h:140,t:"<h3>7. ContentItem → QUEUE / Calendar</h3>idea · title · full script · description · thumbnail · predicted score · nearest analogs. Status: proposed."},
+  {id:"review",c:3,x:2080,y:120,w:300,h:160,t:"<h3>8. Review</h3>✅ Approve / Schedule<br>❌ Decline + reason → regenerate<br>📤 Mark published"},
+  {id:"reward",c:1,x:2080,y:360,w:300,h:150,t:"<h3>9. Reward loop</h3>Published → scrape the REAL video → actual outlier multiplier → reward → back into Learning context."},
+];
+const EDGES = [
+  ["src","right","scrape","left","refresh=True"],
+  ["scrape","right","brain","left","signals + comments"],
+  ["brain","bottom","wiki","top","ingest"],
+  ["mine","left","wiki","bottom",""],
+  ["brain","right","ctx","left","numbers"],
+  ["wiki","right","ctx","left","qualitative"],
+  ["profile","right","ctx","left","niche / guidance"],
+  ["ctx","right","craft","left",""],
+  ["learn","right","craft","left","avoid declines / repeat winners"],
+  ["craft","bottom","script","top","winning idea"],
+  ["script","right","queue","left",""],
+  ["queue","bottom","review","top",""],
+  ["review","bottom","reward","top","publish"],
+  ["reward","left","learn","bottom","feeds back"],
+  ["review","left","learn","right","decline reasons"],
+];
+const PAD=40;
+const minX=Math.min(...NODES.map(n=>n.x)), minY=Math.min(...NODES.map(n=>n.y));
+const maxX=Math.max(...NODES.map(n=>n.x+n.w)), maxY=Math.max(...NODES.map(n=>n.y+n.h));
+const ox=-minX+PAD, oy=-minY+PAD;
+const stage=document.getElementById("stage");
+stage.style.width=(maxX-minX+2*PAD)+"px";
+stage.style.height=(maxY-minY+2*PAD)+"px";
+const byId={};
+for(const n of NODES){
+  byId[n.id]=n;
+  const d=document.createElement("div");
+  d.className="node c"+n.c;
+  d.style.left=(n.x+ox)+"px"; d.style.top=(n.y+oy)+"px";
+  d.style.width=n.w+"px"; d.style.height=n.h+"px";
+  d.innerHTML=n.t;
+  stage.appendChild(d);
+}
+function anchor(n,side){
+  const x=n.x+ox, y=n.y+oy;
+  if(side==="left")  return [x, y+n.h/2];
+  if(side==="right") return [x+n.w, y+n.h/2];
+  if(side==="top")   return [x+n.w/2, y];
+  return [x+n.w/2, y+n.h];
+}
+const svg=document.getElementById("edges");
+svg.setAttribute("width", stage.style.width);
+svg.setAttribute("height", stage.style.height);
+svg.innerHTML='<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#7f9ec2"/></marker></defs>';
+for(const [a,as,b,bs,label] of EDGES){
+  const [x1,y1]=anchor(byId[a],as), [x2,y2]=anchor(byId[b],bs);
+  const mx=(x1+x2)/2, my=(y1+y2)/2;
+  const path=`M ${x1},${y1} C ${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  svg.insertAdjacentHTML("beforeend",
+    `<path d="${path}" fill="none" stroke="#7f9ec2" stroke-width="1.6" marker-end="url(#arr)"/>`);
+  if(label) svg.insertAdjacentHTML("beforeend",
+    `<rect x="${mx-label.length*3-4}" y="${my-9}" width="${label.length*6+8}" height="16" rx="4" fill="#0e1726" opacity="0.85"/>
+     <text class="elabel" x="${mx}" y="${my+3}" text-anchor="middle">${label}</text>`);
+}
+</script>
+</body>
+</html>

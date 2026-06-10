@@ -1,0 +1,43 @@
+{
+  "nodes": [
+    {"id":"src","type":"text","x":-200,"y":-120,"width":300,"height":120,"color":"6","text":"## 1. Watchlist (Sources)\nThe channels you track (e.g. Eric Nowoslawski, Aaron Shepherd). Saved in Settings, table `Source`."},
+    {"id":"profile","type":"text","x":-200,"y":420,"width":300,"height":150,"color":"6","text":"## Creator Profile (Settings)\nniche · offer/CTA · n_per_week · target_score · duration.\nFeeds *guidance* into generation. Single saved row."},
+
+    {"id":"scrape","type":"text","x":260,"y":-120,"width":320,"height":190,"color":"2","text":"## 2. Scrape  ⟵ only when refresh=True\n**yt-dlp today / Apify proposed.**\nViews, likes, duration, title, description + top comments. No media download.\n\n⚠️ Runs ONLY for the *weekly batch*. The *on-command* generate skips this (refresh=false)."},
+
+    {"id":"brain","type":"text","x":720,"y":-160,"width":320,"height":210,"color":"4","text":"## 3. THE BRAIN — brain.db (SQLite)\n• Videos + Comments (the data lake)\n• Channel baselines (median views)\n• **Virality model** (sklearn, ROC-AUC ~0.93) = the numeric GATE\n• Outliers / trending / velocity"},
+    {"id":"wiki","type":"text","x":720,"y":300,"width":320,"height":140,"color":"4","text":"## Brain Wiki (markdown, flag OFF)\nKarpathy LLM-Wiki: styles, formats, pain-points that *compound*. Falls back to DB insight tables when off."},
+    {"id":"mine","type":"text","x":720,"y":490,"width":320,"height":120,"color":"2","text":"## Mine (Claude)\nProven formats + audience pain-points.\n(Currently EMPTY — needs a click of the Dashboard \"Mine\" buttons.)"},
+
+    {"id":"ctx","type":"text","x":1180,"y":-120,"width":320,"height":230,"color":"5","text":"## 4. _build_context()  ← THE KEY STEP\nAssembles the generation prompt **FROM THE BRAIN**, not from any single scraped video:\n• TRENDING NOW\n• PROVEN TOPICS (outlier titles)\n• CREATOR STYLE card\n• PROVEN FORMATS\n• AUDIENCE PAIN-POINTS\n• matching transcript excerpts"},
+
+    {"id":"learn","type":"text","x":1180,"y":420,"width":320,"height":160,"color":"1","text":"## Learning context (the Claude-driven \"RL\")\nRecent DECLINES (+ your reasons) + what actually PERFORMED when published. Injected into every new generation."},
+
+    {"id":"craft","type":"text","x":1640,"y":-120,"width":300,"height":180,"color":"5","text":"## 5. refine.craft()\nresearch → score with virality model → if weak, re-research a stronger angle → LOOP until score ≥ target_score (max 4 tries)."},
+
+    {"id":"script","type":"text","x":1640,"y":300,"width":300,"height":150,"color":"5","text":"## 6. Write the package\nscript.generate_script() → description + booking CTA → thumbnail prompt.\nAll grounded in the same Brain context."},
+
+    {"id":"queue","type":"text","x":2080,"y":-120,"width":300,"height":140,"color":"3","text":"## 7. ContentItem → QUEUE / Calendar\nidea · title · full script · description · thumbnail prompt · predicted score · nearest proven analogs. Status: proposed."},
+
+    {"id":"review","type":"text","x":2080,"y":120,"width":300,"height":160,"color":"3","text":"## 8. Review\n✅ Approve / Schedule\n❌ Decline + reason → regenerate a better one\n📤 Mark published"},
+
+    {"id":"reward","type":"text","x":2080,"y":360,"width":300,"height":150,"color":"1","text":"## 9. Reward loop\nPublished → scrape the REAL video → actual outlier multiplier → reward → back into Learning context."}
+  ],
+  "edges": [
+    {"id":"e1","fromNode":"src","fromSide":"right","toNode":"scrape","toSide":"left","label":"refresh=True"},
+    {"id":"e2","fromNode":"scrape","fromSide":"right","toNode":"brain","toSide":"left","label":"signals + comments"},
+    {"id":"e3","fromNode":"brain","fromSide":"bottom","toNode":"wiki","toSide":"top","label":"ingest"},
+    {"id":"e4","fromNode":"mine","fromSide":"left","toNode":"wiki","toSide":"bottom"},
+    {"id":"e5","fromNode":"brain","fromSide":"right","toNode":"ctx","toSide":"left","label":"numbers"},
+    {"id":"e6","fromNode":"wiki","fromSide":"right","toNode":"ctx","toSide":"left","label":"qualitative"},
+    {"id":"e7","fromNode":"profile","fromSide":"right","toNode":"ctx","toSide":"left","label":"niche / guidance"},
+    {"id":"e8","fromNode":"ctx","fromSide":"right","toNode":"craft","toSide":"left"},
+    {"id":"e9","fromNode":"learn","fromSide":"right","toNode":"craft","toSide":"left","label":"avoid declines / repeat winners"},
+    {"id":"e10","fromNode":"craft","fromSide":"bottom","toNode":"script","toSide":"top","label":"winning idea"},
+    {"id":"e11","fromNode":"script","fromSide":"right","toNode":"queue","toSide":"left"},
+    {"id":"e12","fromNode":"queue","fromSide":"bottom","toNode":"review","toSide":"top"},
+    {"id":"e13","fromNode":"review","fromSide":"bottom","toNode":"reward","toSide":"top","label":"publish"},
+    {"id":"e14","fromNode":"reward","fromSide":"left","toNode":"learn","toSide":"bottom","label":"feeds back"},
+    {"id":"e15","fromNode":"review","fromSide":"left","toNode":"learn","toSide":"right","label":"decline reasons"}
+  ]
+}
