@@ -65,9 +65,7 @@ def _process(run_id: int) -> None:
                 session,
                 source,
                 max_new=settings.agent_max_videos_per_source,
-                popular_k=settings.agent_popular_per_source,
                 comment_limit=settings.comment_limit,
-                cap=True,
                 run=run,
             )
         except Exception as exc:  # noqa: BLE001 - surfaced on the run row
@@ -111,17 +109,10 @@ def resume_pending() -> None:
         ).all()
         resumed = 0
         for r in leftovers:
-            if r.kind == "scrape":
-                r.status = IngestStatus.queued  # interrupted mid-run → requeue from scratch
-                session.add(r)
-                _q.put(r.id)
-                resumed += 1
-            else:
-                # Transcript backfills aren't re-run here — the scheduler autofill drains the
-                # remaining missing transcripts. Just clear the stale 'running' so it can't zombie.
-                r.status = IngestStatus.error
-                r.message = (r.message or "") + " (interrupted; autofill continues)"
-                session.add(r)
+            r.status = IngestStatus.queued  # interrupted mid-run → requeue from scratch
+            session.add(r)
+            _q.put(r.id)
+            resumed += 1
         if leftovers:
             session.commit()
             log.info("resume: re-enqueued %s scrape(s), retired %s stale job(s)", resumed, len(leftovers) - resumed)

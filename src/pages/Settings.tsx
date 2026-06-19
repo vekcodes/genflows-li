@@ -7,7 +7,6 @@ import {
   getStatus,
   ingestNow,
   listSources,
-  retryTranscripts,
   updateProfile,
 } from '@/services/api'
 import type { CreatorProfile, ScrapeJob, Source } from '@/types'
@@ -35,8 +34,8 @@ export default function Settings() {
           <AsyncSection loading={status.loading} error={status.error} data={status.data}>
             {(s) => (
               <StatGrid>
-                <Stat label="Channels" value={s.sources} />
-                <Stat label="Videos" value={s.videos} />
+                <Stat label="Profiles" value={s.sources} />
+                <Stat label="Posts" value={s.videos} />
                 <Stat label="Comments" value={s.comments} />
                 <Stat
                   label="Claude"
@@ -50,13 +49,13 @@ export default function Settings() {
       </div>
 
       <Card className="watchlist-card">
-        <h3 className="card-h">Channel watchlist</h3>
-        <p className="muted">Competitor channels / playlists the agent studies each week.</p>
+        <h3 className="card-h">Profile watchlist</h3>
+        <p className="muted">LinkedIn profiles and company pages the agent studies each week.</p>
         <AddSource onAdded={reload} />
         <AsyncSection loading={sources.loading} error={sources.error} data={sources.data}>
           {(list: Source[]) =>
             list.length === 0 ? (
-              <div className="empty">No channels yet — add one above.</div>
+              <div className="empty">No profiles yet — add one above.</div>
             ) : (
               <ul className="src-list">
                 {list.map((s) => (
@@ -70,9 +69,6 @@ export default function Settings() {
                       </span>
                     </div>
                     <div className="src-actions">
-                      <button className="btn btn-ghost" onClick={() => retryTranscripts(s.id).then(reload)}>
-                        Retry transcripts
-                      </button>
                       <button className="btn btn-ghost" onClick={() => ingestNow(s.id).then(reload)}>
                         Re-scrape
                       </button>
@@ -175,9 +171,9 @@ function ScrapeRow({ job }: { job: ScrapeJob }) {
         </div>
       )}
       <div className="job-detail">
-        {job.status === 'running' && `Scraping ${job.scrape_done} / ${job.scrape_total} videos`}
+        {job.status === 'running' && `Scraping ${job.scrape_done} / ${job.scrape_total} posts`}
         {job.status === 'queued' && 'Waiting in queue…'}
-        {job.status === 'done' && `Done — ${job.new_videos} new video(s)`}
+        {job.status === 'done' && `Done — ${job.new_videos} new post(s)`}
         {job.status === 'error' && `⚠ ${job.message ?? 'failed'}`}
       </div>
     </li>
@@ -210,7 +206,7 @@ function AddSource({ onAdded }: { onAdded: () => void }) {
     <div className="add-src">
       <input
         className="input"
-        placeholder="YouTube channel / playlist / video URL"
+        placeholder="LinkedIn profile or company URL (e.g. linkedin.com/in/johndoe)"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
       />
@@ -298,7 +294,7 @@ function ProfileCard({
             className="input"
             value={form.niche ?? ''}
             onChange={(e) => set('niche', e.target.value)}
-            placeholder="e.g. video editing"
+            placeholder="e.g. personal branding"
           />
         </div>
         <div>

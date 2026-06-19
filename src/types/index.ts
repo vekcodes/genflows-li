@@ -1,6 +1,6 @@
-// Response shapes from the Brain API (backend/app).
+// Response shapes from the LinkedIn Automation API (backend/app).
 
-export type SourceKind = 'channel' | 'playlist' | 'video'
+export type SourceKind = 'profile' | 'company' | 'hashtag'
 
 export interface Source {
   id: number
@@ -15,18 +15,6 @@ export interface Source {
   created_at: string
 }
 
-export interface IngestRun {
-  id: number
-  source_id: number
-  status: string
-  new_videos: number
-  scrape_total: number
-  scrape_done: number
-  message: string | null
-  started_at: string
-  finished_at: string | null
-}
-
 export interface ScrapeJob {
   id: number
   source_id: number
@@ -35,7 +23,7 @@ export interface ScrapeJob {
   status: string // queued | running | done | error
   scrape_total: number
   scrape_done: number
-  new_videos: number
+  new_videos: number  // = new posts
   message: string | null
   started_at: string
   finished_at: string | null
@@ -43,7 +31,7 @@ export interface ScrapeJob {
 
 export interface BrainStatus {
   sources: number
-  videos: number
+  videos: number    // = posts
   transcripts: number
   comments: number
   llm: { provider: string | null; available: boolean }
@@ -51,27 +39,27 @@ export interface BrainStatus {
 }
 
 export interface Baseline {
-  channel_id: string
+  channel_id: string      // author_id
   channel_name: string | null
-  video_count: number
-  median_views: number
+  video_count: number     // post count
+  median_views: number    // median reactions
 }
 
 export interface Outlier {
-  video_id: string
-  title: string
-  channel_id: string
-  views: number
+  video_id: string        // post_id
+  title: string           // post text excerpt
+  channel_id: string      // author_id
+  views: number           // reactions
   channel_median: number
   multiplier: number
 }
 
 export interface Trending {
-  video_id: string
-  title: string
-  channel_id: string
-  views: number
-  velocity: number
+  video_id: string        // post_id
+  title: string           // post text excerpt
+  channel_id: string      // author_id
+  views: number           // reactions
+  velocity: number        // reactions per day
   multiplier: number
   published_at: string
 }
@@ -107,11 +95,11 @@ export interface FormatPattern {
   label: string
   description: string
   avg_multiplier: number
-  example_video_ids: string[]
+  example_video_ids: string[]   // post IDs
 }
 
 export interface StyleCard {
-  channel_id: string
+  channel_id: string    // author_id
   channel_name: string | null
   tone: string
   pacing: string
@@ -127,13 +115,13 @@ export interface ContentGap {
 }
 
 export interface Analog {
-  video_id: string
-  title: string
+  video_id: string    // post_id
+  title: string       // post text excerpt
   multiplier: number
 }
 
 export interface Idea {
-  title: string
+  title: string       // hook / opening line
   angle: string
   format: string
   evidence: string[]
@@ -177,7 +165,7 @@ export interface Demand {
 }
 
 export interface SearchHit {
-  video_id: string
+  video_id: string    // post_id
   idx: number
   score: number
   text: string
@@ -198,23 +186,23 @@ export interface ContentItem {
   id: number
   batch_id: string
   status: ContentStatus
-  title: string
+  title: string             // hook / opening line of the post
   angle: string
   format: string
-  script_markdown: string
-  description: string
-  thumbnail_prompt: string
+  script_markdown: string   // full LinkedIn post text
+  description: string       // first-comment CTA
+  thumbnail_prompt: string  // image/visual prompt
   evidence: string[]
   sections: { beat: string; heading: string; intent?: string; content?: string }[]
   predicted_score: number | null
   predicted_viral: boolean | null
   nearest_analogs: Analog[]
-  channel_id: string | null
+  channel_id: string | null   // author_id
   niche: string | null
   scheduled_for: string | null
   declined_reason: string | null
   regenerated_from_id: number | null
-  published_video_id: string | null
+  published_video_id: string | null   // post URN after publishing
   published_url: string | null
   published_at: string | null
   actual_multiplier: number | null
@@ -228,7 +216,7 @@ export interface ContentRun {
   id: number
   batch_id: string
   status: string
-  phase: string // queued | scraping | mining | writing | done
+  phase: string   // queued | scraping | mining | writing | done
   scrape_total: number
   scrape_done: number
   n_requested: number

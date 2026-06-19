@@ -47,34 +47,34 @@ export default function Dashboard() {
     <Page
       kicker="Brain intelligence"
       title="Dashboard"
-      subtitle="The evidence behind every idea — proven demand, the backtested virality model, mined insights, and live market demand."
+      subtitle="The evidence behind every post idea — proven engagement, the backtested virality model, mined insights, and live market demand."
     >
       {/* Top stats */}
       <AsyncSection loading={status.loading} error={status.error} data={status.data}>
         {(s) => (
           <StatGrid>
-            <Stat label="Channels" value={s.sources} />
-            <Stat label="Videos" value={fmt(s.videos)} />
-            <Stat label="Transcripts" value={fmt(s.transcripts)} />
+            <Stat label="Profiles" value={s.sources} />
+            <Stat label="Posts" value={fmt(s.videos)} />
             <Stat label="Comments" value={fmt(s.comments)} />
+            <Stat label="Claude" value={s.llm.available ? 'ready' : 'offline'} hint={s.llm.provider ?? '—'} />
           </StatGrid>
         )}
       </AsyncSection>
 
-      {/* Virality model — the moat */}
+      {/* Engagement model — the moat */}
       <Card className="moat-card">
         <div className="card-h-row">
-          <h3 className="card-h">Virality model</h3>
+          <h3 className="card-h">Engagement model</h3>
           <span className="moat-badge">★ The moat</span>
         </div>
         <AsyncSection loading={backtest.loading} error={backtest.error} data={backtest.data}>
           {(bt: BacktestReport) =>
             bt.status !== 'ok' ? (
-              <div className="muted">{bt.message || 'Not enough data to backtest yet.'}</div>
+              <div className="muted">{bt.message || 'Not enough data to backtest yet. Scrape some profiles first.'}</div>
             ) : (
               <>
                 <p className="muted">
-                  Time-split backtest — trained on older videos, tested on newer ({bt.n_train} train ·{' '}
+                  Time-split backtest — trained on older posts, tested on newer ({bt.n_train} train ·{' '}
                   {bt.n_test} test). Higher is better.
                 </p>
                 <StatGrid>
@@ -85,11 +85,11 @@ export default function Dashboard() {
                     hint={`vs ${bt.base_rate} base rate`}
                   />
                   <Stat label="Lift" value={bt.lift_at_k ? `${bt.lift_at_k}×` : '—'} hint="top-k vs random" />
-                  <Stat label="Rank corr" value={bt.spearman_corr ?? '—'} hint="score ↔ real multiplier" />
+                  <Stat label="Rank corr" value={bt.spearman_corr ?? '—'} hint="score ↔ real engagement" />
                 </StatGrid>
                 {bt.top_features && bt.top_features.length > 0 && (
                   <div className="feat-block">
-                    <div className="suggest-label">What drives virality on these channels</div>
+                    <div className="suggest-label">What drives engagement on these profiles</div>
                     {bt.top_features.map((f) => {
                       const max = Math.max(...bt.top_features!.map((x) => Math.abs(x.weight)))
                       const pct = max > 0 ? (Math.abs(f.weight) / max) * 100 : 0
@@ -123,22 +123,22 @@ export default function Dashboard() {
       {/* Baselines + Trending */}
       <div className="grid grid-2">
         <Card>
-          <h3 className="card-h">Channel baselines</h3>
+          <h3 className="card-h">Author baselines</h3>
           <AsyncSection loading={baselines.loading} error={baselines.error} data={baselines.data}>
             {(list: Baseline[]) =>
               list.length === 0 ? (
-                <div className="empty">No channels yet.</div>
+                <div className="empty">No profiles yet.</div>
               ) : (
                 <div className="stack">
                   {list.map((b) => (
                     <div className="baseline-row" key={b.channel_id}>
                       <div>
                         <div className="baseline-name">{b.channel_name || b.channel_id}</div>
-                        <div className="muted baseline-sub">{b.video_count} videos</div>
+                        <div className="muted baseline-sub">{b.video_count} posts</div>
                       </div>
                       <div className="baseline-median">
                         {fmt(b.median_views)}
-                        <span className="muted baseline-unit"> median views</span>
+                        <span className="muted baseline-unit"> median reactions</span>
                       </div>
                     </div>
                   ))}
@@ -150,11 +150,11 @@ export default function Dashboard() {
 
         <Card>
           <h3 className="card-h">Trending now</h3>
-          <p className="muted">Recent videos by velocity (views ÷ days live).</p>
+          <p className="muted">Recent posts by velocity (reactions ÷ days live).</p>
           <AsyncSection loading={trending.loading} error={trending.error} data={trending.data}>
             {(list: Trending[]) =>
               list.length === 0 ? (
-                <div className="empty">No recent videos.</div>
+                <div className="empty">No recent posts.</div>
               ) : (
                 <ul className="rank-list">
                   {list.map((t) => (
@@ -173,18 +173,18 @@ export default function Dashboard() {
 
       {/* Proven demand (outliers) */}
       <Card>
-        <h3 className="card-h">Proven demand — top outliers</h3>
-        <p className="muted">Videos that beat their channel median the most = validated topics.</p>
+        <h3 className="card-h">Proven demand — top posts</h3>
+        <p className="muted">Posts that beat their author's median the most = validated topics.</p>
         <AsyncSection loading={outliers.loading} error={outliers.error} data={outliers.data}>
           {(list: Outlier[]) =>
             list.length === 0 ? (
-              <div className="empty">No outliers yet — scrape a channel.</div>
+              <div className="empty">No posts yet — scrape a LinkedIn profile.</div>
             ) : (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Video</th>
-                    <th className="num">Views</th>
+                    <th>Post hook</th>
+                    <th className="num">Reactions</th>
                     <th className="num">Multiplier</th>
                   </tr>
                 </thead>
@@ -259,7 +259,7 @@ export default function Dashboard() {
       {/* Content gaps */}
       <Card>
         <h3 className="card-h">Content gaps</h3>
-        <p className="muted">High-demand pain-points your corpus barely covers = best next videos.</p>
+        <p className="muted">High-demand pain-points your corpus barely covers = best next posts.</p>
         <AsyncSection loading={gaps.loading} error={gaps.error} data={gaps.data}>
           {(list: ContentGap[]) =>
             list.length === 0 ? (
@@ -331,12 +331,12 @@ function DemandExplorer() {
 
   return (
     <Card>
-      <h3 className="card-h">Market demand</h3>
-      <p className="muted">Google Trends direction + YouTube autocomplete for any keyword.</p>
+      <h3 className="card-h">Topic demand</h3>
+      <p className="muted">Google Trends direction + search suggestions for any LinkedIn topic.</p>
       <div className="add-src">
         <input
           className="input"
-          placeholder="e.g. cold email"
+          placeholder="e.g. cold outreach, GTM engineering"
           value={kw}
           onChange={(e) => setKw(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && go()}

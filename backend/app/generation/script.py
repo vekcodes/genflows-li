@@ -1,4 +1,9 @@
-"""Outline → section-wise expand → polish (one LLM call per beat, beats run concurrently)."""
+"""LinkedIn post generation: hook → outline → expand sections → polish.
+
+Replaces the YouTube script writer with LinkedIn-native post generation.
+The shape is the same (sections list + markdown) so the rest of the pipeline
+(agent, content API) works unchanged.
+"""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -13,18 +18,16 @@ from ..llm.parse import complete_json
 from .ideas import _resolve_store
 from . import prompts
 
-VALID_BEATS = {"Hook", "Setup", "Body", "CTA"}
+VALID_BEATS = {"Hook", "Body", "CTA"}
 
 
 def _style_line(session: Session, channel_id: str | None, *, store=None) -> str:
     if not channel_id:
         return ""
 
-    # Prefer the wiki's channel page when enabled+populated; fall back to the DB style card.
     store = _resolve_store(store)
     if store is not None:
         from ..wiki import read as wiki_read
-
         style = wiki_read.channel_style(store, channel_id=channel_id)
         if style:
             return (
@@ -52,12 +55,13 @@ def generate_script(
     llm: LLMProvider | None = None,
     on_progress: Callable[[str], None] = lambda _msg: None,
 ) -> dict:
+    """Generate a LinkedIn post: hook → outline sections → expand each → polish."""
     llm = llm or require_llm()
     style = _style_line(session, channel_id)
 
     # 1) Outline
-    on_progress("script: outlining")
-    sys_o, p_o = prompts.outline(title, angle, style)
+    on_progress("post: outlining")
+    sys_o, p_o = prompts.post_outline(title, angle, style)
     raw = complete_json(llm, p_o, system=sys_o)
     sections = [
         {
@@ -73,34 +77,31 @@ def generate_script(
 
     outline_summary = "\n".join(f"{i+1}. {s['beat']} — {s['heading']}" for i, s in enumerate(sections))
 
-    # 2) Expand the beats concurrently (independent LLM calls; order restored by section dict).
-    # Progress/DB side effects stay on this thread — workers only call the LLM.
+    # 2) Expand sections concurrently.
     total = len(sections)
-    on_progress(f"script: writing {total} beats")
+    on_progress(f"post: writing {total} sections")
 
     def _expand_one(s: dict) -> str:
-        sys_e, p_e = prompts.expand(title, style, outline_summary, s["beat"], s["heading"], s["intent"])
+        sys_e, p_e = prompts.expand_section(
+            title, style, outline_summary, s["beat"], s["heading"], s["intent"]
+        )
         return llm.complete(p_e, system=sys_e).strip()
 
     with ThreadPoolExecutor(max_workers=min(4, total)) as pool:
         futures = {pool.submit(_expand_one, s): s for s in sections}
         for done, future in enumerate(as_completed(futures), start=1):
-            futures[future]["content"] = future.result()  # propagates the first failure
-            on_progress(f"script: writing beats {done}/{total}")
+            futures[future]["content"] = future.result()
+            on_progress(f"post: writing sections {done}/{total}")
 
-    # 3) Assemble markdown
-    body = "\n\n".join(f"## {s['beat']} — {s['heading']}\n\n{s['content']}" for s in sections)
-    markdown = f"# {title}\n\n{body}\n"
+    # 3) Assemble and polish the full post.
+    on_progress("post: assembling")
+    sys_a, p_a = prompts.assemble_post(title, sections, style)
+    post_text = llm.complete(p_a, system=sys_a).strip()
 
-    # 4) Polish (optional)
-    if polish:
-        on_progress("script: polishing")
-        sys_p, p_p = prompts.polish(markdown)
-        polished = llm.complete(p_p, system=sys_p).strip()
-        if polished:
-            markdown = polished
+    if not post_text:
+        post_text = "\n\n".join(s.get("content", "") for s in sections)
 
-    return {"title": title, "sections": sections, "markdown": markdown}
+    return {"title": title, "sections": sections, "markdown": post_text}
 
 
 def generate_description(
@@ -113,7 +114,7 @@ def generate_description(
     cta: str | None = None,
     llm: LLMProvider | None = None,
 ) -> str:
-    """A YouTube description: SEO-optimized opener + book-a-meeting CTA + hashtags."""
+    """Generate the first-comment CTA text for a LinkedIn post."""
     llm = llm or require_llm()
-    sys_d, p_d = prompts.description(title, angle, script_markdown, niche, cta)
+    sys_d, p_d = prompts.first_comment(title, angle, script_markdown, niche, cta)
     return llm.complete(p_d, system=sys_d).strip()

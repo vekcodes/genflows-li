@@ -58,7 +58,7 @@ export default function Assistant() {
 
   const send = useCallback(async () => {
     const chans = channels.split('\n').map((c) => c.trim()).filter(Boolean)
-    const text = prompt.trim() || 'Generate me some YouTube scripts.'
+    const text = prompt.trim() || 'Generate me some LinkedIn posts.'
     const turn: Turn = { id: crypto.randomUUID(), prompt: text, channels: chans, jobId: null, job: null, error: null }
     setTurns((ts) => [...ts, turn])
     setPrompt('')
@@ -87,22 +87,22 @@ export default function Assistant() {
           <span className="brand-mark"><LogoMark size={28} /></span>
           <div>
             <div className="brand-title">GenFlows</div>
-            <div className="brand-sub">YouTube Script Writer</div>
+            <div className="brand-sub">LinkedIn Post Writer</div>
           </div>
         </div>
 
-        <label className="field-label">Channels & videos</label>
+        <label className="field-label">LinkedIn profiles & pages</label>
         <textarea
           className="channels"
-          placeholder={'Paste YouTube channel / video / playlist URLs\n(one per line)'}
+          placeholder={'Paste LinkedIn profile / company page URLs\n(one per line)'}
           value={channels}
           onChange={(e) => setChannels(e.target.value)}
         />
 
         <label className="field-label">Niche (optional)</label>
-        <input className="input" value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. video editing" />
+        <input className="input" value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. personal branding" />
 
-        <label className="field-label">Scripts to write</label>
+        <label className="field-label">Posts to write</label>
         <input
           className="input"
           type="number"
@@ -123,7 +123,7 @@ export default function Assistant() {
 
         {status && (
           <div className="brain-mini">
-            <div>{status.videos} videos · {status.comments} comments</div>
+            <div>{status.videos} posts · {status.comments} comments</div>
             <div>
               Claude:{' '}
               <span className={status.llm.available ? 'ok' : 'off'}>
@@ -138,7 +138,7 @@ export default function Assistant() {
             </div>
           </div>
         )}
-        <div className="side-foot">Scrapes every video · researches each script one-by-one against the virality model. Takes time.</div>
+        <div className="side-foot">Scrapes all posts · researches each idea one-by-one against the engagement model. Takes time.</div>
       </aside>
 
       <main className="chat-wrap">
@@ -149,13 +149,13 @@ export default function Assistant() {
               <h1>
                 What should we <span className="accent">make</span>?
               </h1>
-              <p className="muted">
-                Add competitor channels on the left, then ask — e.g.{' '}
-                <em>“Generate me 3 YouTube scripts about retention editing.”</em> It scrapes{' '}
-                <strong>every</strong> video (metadata + transcript), studies what performs and
+              <p className=”muted”>
+                Add competitor profiles on the left, then ask — e.g.{‘ ‘}
+                <em>”Generate me 3 LinkedIn posts about cold outreach.”</em> It scrapes{‘ ‘}
+                <strong>all posts</strong> (text + comments), studies what performs and
                 what’s trending now, then researches each idea and refines it until it clears the
-                virality bar — writing scripts <strong>one at a time</strong>. This is deliberate,
-                so a fresh channel can take a while.
+                engagement bar — writing posts <strong>one at a time</strong>. This is deliberate,
+                so a fresh profile can take a while.
               </p>
             </div>
           )}
@@ -166,7 +166,7 @@ export default function Assistant() {
                 <div className="bubble">
                   {turn.prompt}
                   {turn.channels.length > 0 && (
-                    <div className="msg-meta">{turn.channels.length} channel(s)</div>
+                    <div className="msg-meta">{turn.channels.length} profile(s)</div>
                   )}
                 </div>
               </div>
@@ -189,7 +189,7 @@ export default function Assistant() {
         <div className="composer">
           <textarea
             className="composer-input"
-            placeholder="Generate me some YouTube scripts…"
+            placeholder="Generate me some LinkedIn posts…"
             value={prompt}
             rows={1}
             onChange={(e) => setPrompt(e.target.value)}
@@ -211,7 +211,7 @@ export default function Assistant() {
 
 function Results({ scripts, note }: { scripts: AssistantScript[]; note: string }) {
   if (scripts.length === 0) {
-    return <div className="muted" style={{ marginTop: 8 }}>{note || 'No scripts produced.'}</div>
+    return <div className="muted" style={{ marginTop: 8 }}>{note || 'No posts produced.'}</div>
   }
   return (
     <div className="results">

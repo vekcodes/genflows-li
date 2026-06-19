@@ -105,8 +105,6 @@ export const createSource = (body: { url: string; niche?: string }, ingest = tru
 export const deleteSource = (id: number) => req<void>(`/sources/${id}`, { method: 'DELETE' })
 export const ingestNow = (id: number) =>
   req<ScrapeJob>(`/sources/${id}/ingest`, { method: 'POST' })
-export const retryTranscripts = (id: number) =>
-  req<ScrapeJob>(`/sources/${id}/transcripts`, { method: 'POST' })
 export const getScrapeQueue = () => req<ScrapeJob[]>('/sources/queue')
 
 // ---- Brain ----
@@ -115,7 +113,7 @@ export const getBaselines = () => req<Baseline[]>('/brain/baselines')
 export const getOutliers = (minMultiplier = 1, limit = 50) =>
   req<Outlier[]>(`/brain/outliers${qs({ min_multiplier: minMultiplier, limit })}`)
 export const getTrending = (limit = 10) => req<Trending[]>(`/brain/trending${qs({ limit })}`)
-export const getBacktest = (viralThreshold = 3) =>
+export const getBacktest = (viralThreshold = 2) =>
   req<BacktestReport>(`/brain/virality/backtest${qs({ viral_threshold: viralThreshold })}`)
 
 export const getPainPoints = (niche?: string) =>

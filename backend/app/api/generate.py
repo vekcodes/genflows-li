@@ -1,4 +1,4 @@
-"""Layer G API: the YouTube Script Writer endpoints."""
+"""Layer G API: LinkedIn post generation endpoints."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,7 +20,7 @@ class IdeasRequest(BaseModel):
     duration_sec: int = 600
     min_score: float = 0.0  # virality gate: drop ideas below this (0-100)
     top: int | None = None
-    viral_threshold: float = 3.0
+    viral_threshold: float = 2.0
 
 
 class ScriptRequest(BaseModel):

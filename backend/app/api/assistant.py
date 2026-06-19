@@ -10,12 +10,12 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 class RunRequest(BaseModel):
-    channels: list[str] = []
-    prompt: str = "Generate me some YouTube scripts."
+    channels: list[str] = []   # LinkedIn profile/company URLs
+    prompt: str = "Generate me some LinkedIn posts."
     niche: str | None = None
     n_scripts: int = 3
-    target_score: float = 60.0  # virality bar each idea must clear before writing
-    offer: str | None = None  # what you sell + booking link → drives the description CTA
+    target_score: float = 60.0
+    offer: str | None = None
 
 
 @router.post("/run")

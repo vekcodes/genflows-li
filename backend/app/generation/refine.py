@@ -1,7 +1,7 @@
-"""The human-brain loop: research an idea → check virality → if weak, re-research → repeat
-until it's strong enough, then hand off to script writing.
+"""The human-brain loop: research an idea → check engagement score → if weak, re-research → repeat
+until it's strong enough, then hand off to post writing.
 
-Deliberate, not rushed — one idea is crafted to a virality target before any script is written.
+Deliberate, not rushed — one idea is crafted to an engagement target before any post is written.
 """
 from __future__ import annotations
 
@@ -18,14 +18,16 @@ from . import novelty, prompts
 
 # Map virality-model features to human-readable "what works" hints.
 _DRIVER_PHRASES = {
-    "is_listicle": "a numbered listicle framing",
-    "has_number": "a specific number in the title",
-    "is_contrarian": "a contrarian / myth-busting angle",
-    "has_question": "a curiosity-gap question",
-    "has_you": 'second-person "you/your" framing',
-    "caps_ratio": "stronger emphasis words",
-    "title_words": "a punchier title length",
-    "is_howto": "a concrete how-to promise",
+    "is_listicle": "a numbered listicle format",
+    "has_number": "a specific number in the hook",
+    "is_contrarian": "a contrarian / unpopular-opinion angle",
+    "is_question": "a curiosity-gap question",
+    "has_emoji": "strategic emoji use",
+    "has_cta": "a strong closing call-to-action",
+    "is_story": "a personal story framing",
+    "is_how_to": "a concrete how-to or framework",
+    "has_hook": "a punchy standalone opening line",
+    "line_count": "more paragraph breaks and white space",
 }
 
 
@@ -95,7 +97,7 @@ def craft(
         if sim > nov_threshold:  # a higher score isn't worth it if it's a near-copy
             on_progress(f"skipped a near-duplicate refinement (sim {round(sim, 2)})")
             continue
-        v = virality.score(session, title=title, duration_sec=duration_sec)
+        v = virality.score(session, title=title)
         scored = {
             "title": title,
             "angle": str(cand.get("angle", "")).strip(),

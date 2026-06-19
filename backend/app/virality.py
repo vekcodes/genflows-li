@@ -1,15 +1,12 @@
-"""★ Virality model + backtester (Layer E).
+"""★ Engagement model + backtester (Layer E) — LinkedIn edition.
 
-Turns "will this go viral?" into a measurable, *backtested* claim.
+Turns "will this post go viral?" into a measurable, *backtested* claim.
 
-- Features are everything knowable **at publish time** (title traits, format, duration) — no
-  leakage from a video's eventual success.
-- Target is the realized **outlier multiplier** (views ÷ channel median); "viral" = ≥ threshold.
-- The backtest uses a **time-based split** (train on older videos, test on newer) and reports
-  ROC-AUC, precision@k, and rank correlation between predicted score and actual multiplier.
+- Features are everything knowable at write time (post text traits, format).
+- Target is the realised engagement multiplier (reactions ÷ author median).
+- The backtest uses a time-based split (train on older posts, test on newer).
 
-Pure analytics over the Raw Lake — no LLM required. scikit-learn is imported lazily so the rest
-of the API works even if it isn't installed.
+Pure analytics over the Raw Lake — no LLM required.
 """
 from __future__ import annotations
 
@@ -23,53 +20,56 @@ from statistics import median
 from sqlmodel import Session, select
 
 from .config import get_settings
-from .models import Video
+from .models import LinkedInPost
 
-# Fixed feature order — used to build model input vectors consistently.
 FEATURE_NAMES: list[str] = [
-    "title_chars",
-    "title_words",
-    "has_number",
-    "has_question",
-    "has_you",
-    "has_brackets",
+    "post_length",
+    "line_count",
+    "has_hook",
     "is_listicle",
-    "is_howto",
+    "is_story",
+    "is_how_to",
+    "is_question",
     "is_contrarian",
-    "caps_ratio",
-    "duration_min",
+    "has_emoji",
+    "has_cta",
+    "has_number",
 ]
 
-_LISTICLE_RE = re.compile(r"^\s*\d+\s|\b\d+\s+(things|ways|mistakes|tips|reasons|signs|steps|rules)\b")
-_CONTRARIAN_RE = re.compile(r"\b(wrong|stop|don't|dont|myth|truth|nobody|everyone|never|secret)\b")
-_YOU_RE = re.compile(r"\byou\b|\byour\b")
+_EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff\U00002600-\U000027BF]", flags=re.UNICODE)
+_LISTICLE_RE = re.compile(r"^\s*\d+[\.\)]\s|\b\d+\s+(ways|tips|mistakes|lessons|rules|steps|signs|things|reasons)\b", re.I)
+_STORY_RE = re.compile(r"\b(i was|i am|i used to|my story|last year|a year ago|when i|i remember|true story|confession)\b", re.I)
+_HOWTO_RE = re.compile(r"\b(how to|how i|step by step|guide|framework|playbook|system|formula)\b", re.I)
+_CONTRARIAN_RE = re.compile(r"\b(wrong|stop|don't|dont|myth|truth|nobody|everyone|never|secret|unpopular|controversial|hot take)\b", re.I)
+_CTA_RE = re.compile(r"\b(comment|like|share|follow|repost|dm me|reach out|link in bio|save this|drop a|let me know|thoughts\?|agree\?|what do you think)\b", re.I)
+_HOOK_STARTERS = re.compile(r"^(i |we |you |the |this |why |how |what |when |if |here|just|stop|most|many|every|never|always|last |a |an |in |on )", re.I)
 
 
-def extract_features(title: str, duration_sec: int) -> dict[str, float]:
-    t = title or ""
-    low = t.lower()
-    words = re.findall(r"\w+", t)
-    wc = len(words)
-    caps = sum(1 for w in words if len(w) > 1 and w.isupper())
+def extract_features(text: str) -> dict[str, float]:
+    t = text or ""
+    lines = [l for l in t.split("\n") if l.strip()]
+    first_line = lines[0] if lines else ""
     return {
-        "title_chars": float(len(t)),
-        "title_words": float(wc),
-        "has_number": 1.0 if re.search(r"\d", t) else 0.0,
-        "has_question": 1.0 if "?" in t else 0.0,
-        "has_you": 1.0 if _YOU_RE.search(low) else 0.0,
-        "has_brackets": 1.0 if re.search(r"[\[\(]", t) else 0.0,
-        "is_listicle": 1.0 if _LISTICLE_RE.search(low) else 0.0,
-        "is_howto": 1.0 if ("how to" in low or "how i" in low) else 0.0,
-        "is_contrarian": 1.0 if _CONTRARIAN_RE.search(low) else 0.0,
-        "caps_ratio": (caps / wc) if wc else 0.0,
-        "duration_min": (duration_sec or 0) / 60.0,
+        "post_length": float(len(t)),
+        "line_count": float(len(lines)),
+        "has_hook": 1.0 if (len(first_line) <= 120 and bool(_HOOK_STARTERS.match(first_line))) else 0.0,
+        "is_listicle": 1.0 if bool(_LISTICLE_RE.search(t)) else 0.0,
+        "is_story": 1.0 if bool(_STORY_RE.search(t)) else 0.0,
+        "is_how_to": 1.0 if bool(_HOWTO_RE.search(t)) else 0.0,
+        "is_question": 1.0 if "?" in t else 0.0,
+        "is_contrarian": 1.0 if bool(_CONTRARIAN_RE.search(t)) else 0.0,
+        "has_emoji": 1.0 if bool(_EMOJI_RE.search(t)) else 0.0,
+        "has_cta": 1.0 if bool(_CTA_RE.search(t)) else 0.0,
+        "has_number": 1.0 if bool(re.search(r"\d", t)) else 0.0,
     }
 
 
 def dominant_format(feats: dict[str, float]) -> str:
     if feats["is_listicle"]:
         return "listicle"
-    if feats["is_howto"]:
+    if feats["is_story"]:
+        return "story"
+    if feats["is_how_to"]:
         return "howto"
     if feats["is_contrarian"]:
         return "contrarian"
@@ -78,8 +78,8 @@ def dominant_format(feats: dict[str, float]) -> str:
 
 @dataclass
 class Row:
-    video_id: str
-    title: str
+    post_id: str
+    text: str
     multiplier: float
     label: int
     published_at: datetime
@@ -87,32 +87,31 @@ class Row:
     features: list[float] = field(default_factory=list)
 
 
-def _channel_medians(videos: list[Video]) -> dict[str, float]:
+def _author_medians(posts: list[LinkedInPost]) -> dict[str, float]:
     by: dict[str, list[int]] = {}
-    for v in videos:
-        if v.views > 0:
-            by.setdefault(v.channel_id, []).append(v.views)
-    return {cid: float(median(vs)) for cid, vs in by.items() if vs}
+    for p in posts:
+        if p.reactions > 0:
+            by.setdefault(p.author_id, []).append(p.reactions)
+    return {aid: float(median(rs)) for aid, rs in by.items() if rs}
 
 
 def collect_rows(session: Session, *, threshold: float) -> list[Row]:
-    """Build labelled feature rows from every ingested video with a known publish date."""
-    videos = session.exec(select(Video)).all()
-    medians = _channel_medians(videos)
+    posts = session.exec(select(LinkedInPost)).all()
+    medians = _author_medians(posts)
     rows: list[Row] = []
-    for v in videos:
-        med = medians.get(v.channel_id, 0.0)
-        if med <= 0 or v.published_at is None or v.views <= 0:
+    for p in posts:
+        med = medians.get(p.author_id, 0.0)
+        if med <= 0 or p.published_at is None or p.reactions <= 0:
             continue
-        mult = v.views / med
-        feats = extract_features(v.title, v.duration_sec)
+        mult = p.reactions / med
+        feats = extract_features(p.text)
         rows.append(
             Row(
-                video_id=v.id,
-                title=v.title,
+                post_id=p.id,
+                text=p.text[:120],
                 multiplier=round(mult, 3),
                 label=1 if mult >= threshold else 0,
-                published_at=v.published_at,
+                published_at=p.published_at,
                 fmt=dominant_format(feats),
                 features=[feats[name] for name in FEATURE_NAMES],
             )
@@ -120,24 +119,22 @@ def collect_rows(session: Session, *, threshold: float) -> list[Row]:
     return rows
 
 
-# ---- Backtest ----
-
-MIN_ROWS = 24  # below this, a held-out backtest isn't meaningful
+MIN_ROWS = 20
 
 
-def backtest(session: Session, *, threshold: float = 3.0, test_frac: float = 0.3) -> dict:
+def backtest(session: Session, *, threshold: float = 2.0, test_frac: float = 0.3) -> dict:
     rows = collect_rows(session, threshold=threshold)
     n = len(rows)
     base = {"status": "ok", "n": n, "viral_threshold": threshold}
 
     if n < MIN_ROWS:
         return {**base, "status": "insufficient_data",
-                "message": f"need >= {MIN_ROWS} videos with publish dates, have {n}"}
+                "message": f"need >= {MIN_ROWS} posts with publish dates, have {n}"}
 
     n_viral = sum(r.label for r in rows)
     if n_viral == 0 or n_viral == n:
         return {**base, "status": "insufficient_data",
-                "message": f"need both viral and non-viral examples (viral={n_viral}/{n})"}
+                "message": f"need both high- and low-engagement examples (viral={n_viral}/{n})"}
 
     try:
         import numpy as np
@@ -146,10 +143,9 @@ def backtest(session: Session, *, threshold: float = 3.0, test_frac: float = 0.3
         from sklearn.metrics import roc_auc_score
         from sklearn.pipeline import make_pipeline
         from sklearn.preprocessing import StandardScaler
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:
         return {**base, "status": "error", "message": f"ML deps missing: {exc}"}
 
-    # Time-based split: oldest -> train, newest -> test (no leakage).
     rows.sort(key=lambda r: r.published_at)
     cut = int(n * (1 - test_frac))
     train, test = rows[:cut], rows[cut:]
@@ -163,10 +159,7 @@ def backtest(session: Session, *, threshold: float = 3.0, test_frac: float = 0.3
     y_test = np.array([r.label for r in test])
     mult_test = np.array([r.multiplier for r in test])
 
-    model = make_pipeline(
-        StandardScaler(),
-        LogisticRegression(max_iter=1000, class_weight="balanced"),
-    )
+    model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced"))
     model.fit(X_train, y_train)
     proba = model.predict_proba(X_test)[:, 1]
 
@@ -176,9 +169,8 @@ def backtest(session: Session, *, threshold: float = 3.0, test_frac: float = 0.3
     precision_at_k = float(y_test[order[:k]].mean())
     base_rate = float(y_test.mean())
     spearman = spearmanr(proba, mult_test).statistic
-    spearman = None if spearman != spearman else float(spearman)  # NaN guard
+    spearman = None if spearman != spearman else float(spearman)
 
-    # Standardised-feature coefficients → which traits drive virality.
     logreg = model.named_steps["logisticregression"]
     coefs = dict(zip(FEATURE_NAMES, logreg.coef_[0].tolist()))
     top = sorted(coefs.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
@@ -200,29 +192,22 @@ def backtest(session: Session, *, threshold: float = 3.0, test_frac: float = 0.3
     }
 
 
-# ---- Scoring a candidate idea/title ----
-
-# A refine loop scores dozens of candidates per batch; refitting on the (unchanged) video set
-# each time is pure waste. Cache the fitted production model + backtest, keyed on the video
-# count and a TTL, so a batch fits once and rescraping/new ingests invalidate naturally.
 _fit_lock = threading.Lock()
-_fit_cache: dict | None = None  # {key, threshold, built_at, rows, model, backtest}
+_fit_cache: dict | None = None
 
 
 def _fitted(session: Session, *, threshold: float) -> dict:
     global _fit_cache
     from sqlalchemy import func
 
-    n_videos = session.exec(select(func.count()).select_from(Video)).one()
-    # Key on the engine too — tests/tools use separate (in-memory) engines whose row counts
-    # can collide with each other.
-    n_videos = (id(session.get_bind()), n_videos)
+    n_posts = session.exec(select(func.count()).select_from(LinkedInPost)).one()
+    n_posts = (id(session.get_bind()), n_posts)
     ttl = get_settings().virality_cache_ttl_sec
     with _fit_lock:
         c = _fit_cache
         if (
             c is not None
-            and c["key"] == n_videos
+            and c["key"] == n_posts
             and c["threshold"] == threshold
             and time.monotonic() - c["built_at"] < ttl
         ):
@@ -230,7 +215,7 @@ def _fitted(session: Session, *, threshold: float) -> dict:
 
     rows = collect_rows(session, threshold=threshold)
     entry: dict = {
-        "key": n_videos, "threshold": threshold, "built_at": time.monotonic(),
+        "key": n_posts, "threshold": threshold, "built_at": time.monotonic(),
         "rows": rows, "model": None, "backtest": None,
     }
     if len(rows) >= MIN_ROWS and len({r.label for r in rows}) == 2:
@@ -241,9 +226,7 @@ def _fitted(session: Session, *, threshold: float) -> dict:
 
         X = np.array([r.features for r in rows])
         y = np.array([r.label for r in rows])
-        model = make_pipeline(
-            StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced")
-        )
+        model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced"))
         model.fit(X, y)
         entry["model"] = model
         entry["backtest"] = backtest(session, threshold=threshold)
@@ -252,10 +235,11 @@ def _fitted(session: Session, *, threshold: float) -> dict:
     return entry
 
 
-def score(session: Session, *, title: str, duration_sec: int = 0, threshold: float = 3.0) -> dict:
+def score(session: Session, *, title: str, duration_sec: int = 0, threshold: float = 2.0) -> dict:
+    """Score a candidate post idea/hook text (0-100) for predicted engagement."""
     try:
         import numpy as np
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:
         return {"status": "error", "message": f"ML deps missing: {exc}"}
 
     fitted = _fitted(session, threshold=threshold)
@@ -263,14 +247,13 @@ def score(session: Session, *, title: str, duration_sec: int = 0, threshold: flo
     if model is None:
         n = len(rows)
         return {"status": "insufficient_data", "n": n,
-                "message": f"train the model first — need >= {MIN_ROWS} videos across both classes (have {n})"}
+                "message": f"need >= {MIN_ROWS} posts across both engagement classes (have {n})"}
 
-    feats = extract_features(title, duration_sec)
+    feats = extract_features(title)
     fmt = dominant_format(feats)
     vec = np.array([[feats[name] for name in FEATURE_NAMES]])
     proba = float(model.predict_proba(vec)[0, 1])
 
-    # Nearest proven analogs: top viral videos sharing the candidate's format.
     viral = [r for r in rows if r.label == 1]
     same_fmt = [r for r in viral if r.fmt == fmt] or viral
     analogs = sorted(same_fmt, key=lambda r: r.multiplier, reverse=True)[:3]
@@ -280,12 +263,12 @@ def score(session: Session, *, title: str, duration_sec: int = 0, threshold: flo
         "status": "ok",
         "title": title,
         "format": fmt,
-        "virality_score": round(proba * 100, 1),  # 0-100
+        "virality_score": round(proba * 100, 1),
         "predicted_viral": proba >= 0.5,
         "viral_threshold": threshold,
-        "model_confidence_auc": bt.get("roc_auc"),  # how trustworthy the score is, from backtest
+        "model_confidence_auc": bt.get("roc_auc"),
         "nearest_analogs": [
-            {"video_id": a.video_id, "title": a.title, "multiplier": round(a.multiplier, 2)}
+            {"video_id": a.post_id, "title": a.text, "multiplier": round(a.multiplier, 2)}
             for a in analogs
         ],
     }

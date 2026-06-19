@@ -1,91 +1,77 @@
-"""Per-video signal + comment scraping via yt-dlp (single network call each).
+"""LinkedIn post scraping via Apify.
 
-Signals — views/likes/duration/dates/title/description — are what competitor
-analysis runs on. Comments feed pain-point mining. We never download media.
+Fetches posts for a given LinkedIn source URL.
+All scraping goes through Apify — there is no local fallback for LinkedIn.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from yt_dlp import YoutubeDL
+from ..models import SourceKind
+from . import apify
 
 
-def _parse_upload_date(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y%m%d")
-    except ValueError:
-        return None
-
-
-def fetch_video(video_id: str, *, with_comments: bool, comment_limit: int) -> dict[str, Any]:
-    """Return raw info for a single video (metadata, +comments optional).
-
-    Routes through Apify when configured (offloads this machine), and falls back to local
-    yt-dlp on any Apify error so a misconfigured actor can never break ingestion.
-    """
-    from . import apify
-
-    if apify.enabled():
-        try:
-            return apify.fetch_video(video_id, with_comments=with_comments, comment_limit=comment_limit)
-        except Exception as exc:  # noqa: BLE001 - degrade to local scraping
-            import logging
-
-            logging.getLogger("brain.ingest").warning(
-                "Apify fetch failed for %s (%s); falling back to yt-dlp", video_id, exc
-            )
-    return _ytdlp_fetch_video(video_id, with_comments=with_comments, comment_limit=comment_limit)
-
-
-def _ytdlp_fetch_video(video_id: str, *, with_comments: bool, comment_limit: int) -> dict[str, Any]:
-    """Local yt-dlp fetch (the fallback backend)."""
-    opts: dict = {
-        "quiet": True,
-        "skip_download": True,
-        "noprogress": True,
-        "ignoreerrors": True,
-    }
-    if with_comments:
-        opts["getcomments"] = True
-        # Cap comment extraction — it is the slow part.
-        opts["extractor_args"] = {"youtube": {"max_comments": [str(comment_limit), "all", "0"]}}
-
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    with YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-    if info is None:
-        raise ValueError(f"Could not fetch video {video_id}")
-    return info
-
-
-def map_signals(info: dict[str, Any]) -> dict[str, Any]:
-    """Flatten yt-dlp info into Video column values."""
-    return {
-        "id": info["id"],
-        "channel_id": info.get("channel_id") or info.get("uploader_id") or "",
-        "channel_name": info.get("channel") or info.get("uploader"),
-        "title": info.get("title") or "",
-        "description": info.get("description") or "",
-        "views": int(info.get("view_count") or 0),
-        "likes": int(info.get("like_count") or 0),
-        "duration_sec": int(info.get("duration") or 0),
-        "published_at": _parse_upload_date(info.get("upload_date")),
-        "comment_count": int(info.get("comment_count") or 0),
-    }
-
-
-def map_comments(info: dict[str, Any], limit: int) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for c in (info.get("comments") or [])[:limit]:
-        out.append(
-            {
-                "author": c.get("author"),
-                "text": c.get("text") or "",
-                "likes": int(c.get("like_count") or 0),
-                "published_at": str(c.get("_time_text") or c.get("timestamp") or ""),
-            }
+def fetch_posts(
+    url: str,
+    kind: SourceKind,
+    *,
+    limit: int,
+    with_comments: bool,
+    comment_limit: int,
+) -> list[dict[str, Any]]:
+    """Fetch posts for a LinkedIn profile or company page via Apify."""
+    if not apify.enabled():
+        raise RuntimeError(
+            "LinkedIn scraping requires an Apify token. "
+            "Set BRAIN_APIFY_TOKEN in your .env file. "
+            "Sign up free at https://apify.com."
         )
+
+    if kind == SourceKind.profile:
+        return apify.fetch_profile_posts(
+            url, limit=limit, with_comments=with_comments, comment_limit=comment_limit
+        )
+    elif kind == SourceKind.company:
+        return apify.fetch_company_posts(
+            url, limit=limit, with_comments=with_comments, comment_limit=comment_limit
+        )
+    else:
+        raise ValueError(f"Unsupported source kind for scraping: {kind}")
+
+
+def map_signals(post: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a raw post dict into LinkedInPost column values."""
+    published_at = None
+    raw_date = post.get("published_at")
+    if raw_date:
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                published_at = datetime.strptime(raw_date[:19], fmt[:len(raw_date[:19])])
+                break
+            except ValueError:
+                continue
+
+    return {
+        "id": post["id"],
+        "author_id": post.get("author_id") or "unknown",
+        "author_name": post.get("author_name"),
+        "text": post.get("text") or "",
+        "reactions": int(post.get("reactions") or 0),
+        "comments_count": int(post.get("comments_count") or 0),
+        "shares": int(post.get("shares") or 0),
+        "post_type": post.get("post_type") or "text",
+        "published_at": published_at,
+    }
+
+
+def map_comments(post: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for c in (post.get("comments") or [])[:limit]:
+        out.append({
+            "author": c.get("author"),
+            "text": c.get("text") or "",
+            "likes": int(c.get("likes") or 0),
+            "published_at": str(c.get("published_at") or ""),
+        })
     return out

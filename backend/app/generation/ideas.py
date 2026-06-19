@@ -1,9 +1,9 @@
-"""Evidence-ranked idea generation, gated by the backtested virality model."""
+"""Evidence-ranked LinkedIn post idea generation, gated by the engagement model."""
 from __future__ import annotations
 
 from sqlmodel import Session
 
-from .. import brain, insights, vectorstore, virality
+from .. import brain, insights, virality
 from ..config import get_settings
 from ..llm.base import LLMProvider
 from ..llm.factory import require_llm
@@ -12,16 +12,14 @@ from . import novelty, prompts
 
 
 def _resolve_store(store):
-    """Return a WikiStore when the wiki is enabled, else None (so callers fall back to DB)."""
     if not get_settings().brain_wiki_enabled:
         return None
     if store is not None:
         return store
     try:
         from .. import wiki
-
         return wiki.default_store()
-    except Exception:  # pragma: no cover - never let a wiki problem break generation
+    except Exception:
         return None
 
 
@@ -37,23 +35,15 @@ def _build_context(
     store = _resolve_store(store)
     wiki_read = None
     if store is not None:
-        from ..wiki import read as wiki_read  # noqa: F401
+        from ..wiki import read as wiki_read
 
-    # ---- Quantitative signals: always from the DB / model ----
+    # Trending posts (velocity-ranked).
     trend = brain.trending(session, limit=8)
     if trend:
-        parts.append("TRENDING NOW (recent videos by velocity):\n" + "\n".join(
+        parts.append("TRENDING NOW (recent posts by velocity):\n" + "\n".join(
             f"- {t.velocity}/day · {t.multiplier}x  {t.title}" for t in trend
         ))
 
-    if query:
-        hits = vectorstore.search(session, query, k=4)
-        if hits:
-            parts.append("RELEVANT TRANSCRIPT EXCERPTS:\n" + "\n".join(
-                f"- {h['text']}" for h in hits
-            ))
-
-    # ---- Qualitative layer: wiki when enabled+populated, else DB insight tables ----
     # Creator style.
     style = wiki_read.channel_style(store, channel_id=channel_id) if wiki_read else None
     if style:
@@ -96,10 +86,10 @@ def _build_context(
                 f"- ({p.frequency}) {p.question}" for p in pains
             ))
 
-    # Proven topics — always from the DB (raw outlier titles).
+    # Proven topics — from high-engagement post hooks.
     proven = brain.outliers(session, min_multiplier=2.0, limit=12)
     if proven:
-        parts.append("PROVEN TOPICS (titles that beat the channel median):\n" + "\n".join(
+        parts.append("PROVEN HOOKS (posts that beat author median):\n" + "\n".join(
             f"- {o.multiplier}x  {o.title}" for o in proven
         ))
 
@@ -112,15 +102,15 @@ def generate_ideas(
     channel_id: str | None = None,
     niche: str | None = None,
     n: int = 8,
-    duration_sec: int = 600,
+    duration_sec: int = 0,      # not used for LinkedIn but kept for API compat
     min_score: float = 0.0,
     top: int | None = None,
-    viral_threshold: float = 3.0,
+    viral_threshold: float = 2.0,
     guidance: str = "",
     query: str | None = None,
     llm: LLMProvider | None = None,
 ) -> dict:
-    """Generate candidates with the LLM, then score + gate them with the virality model."""
+    """Generate LinkedIn post ideas, scored + gated by the engagement model."""
     llm = llm or require_llm()
     context = _build_context(session, channel_id=channel_id, niche=niche, query=query or guidance)
     system, prompt = prompts.ideas(context, n, guidance)
@@ -132,7 +122,7 @@ def generate_ideas(
         title = str(item.get("title", "")).strip()
         if not title:
             continue
-        v = virality.score(session, title=title, duration_sec=duration_sec, threshold=viral_threshold)
+        v = virality.score(session, title=title, threshold=viral_threshold)
         sim = novelty.max_similarity(title, existing)
         scored.append({
             "title": title,
@@ -147,8 +137,6 @@ def generate_ideas(
             "_similarity": sim,
         })
 
-    # Novelty gate: drop near-copies of an existing video / queued title. Keep the most-original
-    # one as a fallback so we never return empty. The virality model still ranks what survives.
     threshold = get_settings().novelty_max_similarity
     unique = [s for s in scored if s["_similarity"] <= threshold]
     if not unique and scored:

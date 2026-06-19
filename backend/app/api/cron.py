@@ -41,17 +41,12 @@ def _authorize(request: Request) -> None:
 
 @router.get("/scrape-tick")
 def scrape_tick(request: Request, session: Session = Depends(get_session)) -> dict:
-    """Re-ingest any source past its cadence (new videos only) + backfill a few transcripts."""
+    """Re-ingest any source past its cadence (new posts only)."""
     _authorize(request)
     from .. import scheduler
-    from ..ingestion import transcripts
 
     scheduler._tick()
-    settings = get_settings()
-    autofill = {"total": 0}
-    if settings.transcript_autofill_enabled:
-        autofill = transcripts.backfill_missing(session, limit=settings.transcript_autofill_per_tick)
-    return {"status": "ok", "transcripts": autofill}
+    return {"status": "ok"}
 
 
 @router.get("/weekly-content")
@@ -89,7 +84,7 @@ def weekly_content(
 
 @router.get("/daily-rescore")
 def daily_rescore(request: Request, session: Session = Depends(get_session)) -> dict:
-    """Re-measure published items as their view counts accrue."""
+    """Re-measure published items as their reaction counts accrue."""
     _authorize(request)
     from .. import agent
 

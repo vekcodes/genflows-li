@@ -13,7 +13,7 @@ export function ScriptCard({ script, index }: { script: AssistantScript; index: 
   const [draft, setDraft] = useState(script.markdown)
 
   const fullMarkdown = () =>
-    `# ${script.title}\n\n## YouTube description\n\n${desc}\n\n## Script\n\n${draft}\n`
+    `# ${script.title}\n\n## First comment CTA\n\n${desc}\n\n## LinkedIn post\n\n${draft}\n`
 
   const copy = (text: string) => navigator.clipboard?.writeText(text)
 
@@ -52,33 +52,19 @@ export function ScriptCard({ script, index }: { script: AssistantScript; index: 
             </div>
           )}
 
-          {/* Title */}
+          {/* Hook */}
           <div className="deliverable">
             <div className="deliverable-head">
-              <span className="deliverable-label">YouTube title</span>
+              <span className="deliverable-label">Post hook</span>
               <button className="btn btn-ghost" onClick={() => copy(script.title)}>⧉ Copy</button>
             </div>
             <div className="title-box">{script.title}</div>
           </div>
 
-          {/* Description (SEO + booking CTA) */}
+          {/* LinkedIn post */}
           <div className="deliverable">
             <div className="deliverable-head">
-              <span className="deliverable-label">YouTube description — SEO + book-a-meeting CTA</span>
-              <button className="btn btn-ghost" onClick={() => copy(desc)}>⧉ Copy</button>
-            </div>
-            <textarea
-              className="desc-editor"
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              spellCheck={false}
-            />
-          </div>
-
-          {/* Script */}
-          <div className="deliverable">
-            <div className="deliverable-head">
-              <span className="deliverable-label">Script</span>
+              <span className="deliverable-label">LinkedIn post</span>
               <span className="beats">
                 {script.sections.map((s, i) => (
                   <Pill key={i} tone="default">
@@ -95,11 +81,25 @@ export function ScriptCard({ script, index }: { script: AssistantScript; index: 
             />
           </div>
 
+          {/* First comment CTA */}
+          <div className="deliverable">
+            <div className="deliverable-head">
+              <span className="deliverable-label">First comment CTA</span>
+              <button className="btn btn-ghost" onClick={() => copy(desc)}>⧉ Copy</button>
+            </div>
+            <textarea
+              className="desc-editor"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+
           <div className="script-actions" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
             <button className="btn btn-ghost" onClick={() => { setDesc(script.description); setDraft(script.markdown) }}>
               ↺ Reset
             </button>
-            <button className="btn" onClick={download}>↓ Export .md (title + description + script)</button>
+            <button className="btn" onClick={download}>↓ Export .md (hook + post + CTA)</button>
           </div>
         </div>
       )}

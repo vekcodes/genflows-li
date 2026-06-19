@@ -20,9 +20,9 @@ function scoreClass(score: number | null): string {
 
 const PHASE_LABEL: Record<string, string> = {
   queued: 'Starting…',
-  scraping: 'Scraping videos',
+  scraping: 'Scraping posts',
   mining: 'Mining insights',
-  writing: 'Writing scripts',
+  writing: 'Writing posts',
   done: 'Done',
 }
 
@@ -32,7 +32,7 @@ function BatchProgress({ run }: { run: ContentRun }) {
   let detail = run.message || ''
   if (run.phase === 'scraping' && run.scrape_total > 0) {
     pct = Math.round((run.scrape_done / run.scrape_total) * 100)
-    detail = `${run.scrape_done} / ${run.scrape_total} videos`
+    detail = `${run.scrape_done} / ${run.scrape_total} posts`
   } else if (run.phase === 'writing' && run.n_requested > 0) {
     pct = Math.round((run.n_done / run.n_requested) * 100)
     detail = run.message
@@ -119,7 +119,7 @@ export default function Calendar() {
     <Page
       kicker="Autonomous content engine"
       title="Content Calendar"
-      subtitle="Every week the agent researches your channels, clears the virality bar, and drops a fresh batch here. Review, approve, publish — it learns from what you ship."
+      subtitle="Every week the agent researches your LinkedIn profiles, clears the engagement bar, and drops a fresh batch here. Review, approve, publish — it learns from what you ship."
     >
       <div className="cal-toolbar">
         <button className="btn" onClick={() => generate()} disabled={busy}>
@@ -132,7 +132,7 @@ export default function Calendar() {
         <div className="oncommand">
           <input
             className="input"
-            placeholder="…or generate one video about a specific topic"
+            placeholder="…or generate one post about a specific topic"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && runOnCommand()}

@@ -40,7 +40,6 @@ class IngestRunRead(BaseModel):
 
 
 class ScrapeJobRead(BaseModel):
-    """A scrape-queue entry for the UI — an IngestRun enriched with its channel's name."""
     id: int
     source_id: int
     source_title: str | None
@@ -55,17 +54,17 @@ class ScrapeJobRead(BaseModel):
 
 
 class BaselineRead(BaseModel):
-    channel_id: str
+    channel_id: str       # author_id
     channel_name: str | None
-    video_count: int
-    median_views: float
+    video_count: int      # post count
+    median_views: float   # median reactions
 
 
 class OutlierRead(BaseModel):
-    video_id: str
-    title: str
-    channel_id: str
-    views: int
+    video_id: str         # post_id
+    title: str            # post text excerpt
+    channel_id: str       # author_id
+    views: int            # reactions
     channel_median: float
     multiplier: float
 
@@ -76,7 +75,6 @@ class LLMStatus(BaseModel):
 
 
 # ---- Agentic content engine ----
-
 
 class ContentItemRead(BaseModel):
     id: int

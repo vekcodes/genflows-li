@@ -35,16 +35,16 @@ def parse_suggest(payload: Any) -> list[str]:
     return []
 
 
-def search_suggest(query: str, *, youtube: bool = True, timeout: float = 10.0) -> list[str]:
-    """Free Google/YouTube autocomplete suggestions for a query."""
-    params = {"client": "firefox", "q": query, "hl": "en"}
-    if youtube:
-        params["ds"] = "yt"
+def search_suggest(query: str, *, timeout: float = 10.0) -> list[str]:
+    """Free Google autocomplete suggestions for a query (for LinkedIn topic research)."""
+    params = {"client": "firefox", "q": query + " linkedin", "hl": "en"}
     try:
         r = httpx.get("https://suggestqueries.google.com/complete/search", params=params, timeout=timeout)
         r.raise_for_status()
-        return parse_suggest(r.json())
-    except Exception as exc:  # network / parse / blocked
+        results = parse_suggest(r.json())
+        # Strip " linkedin" suffix that we added for better results.
+        return [s.replace(" linkedin", "").strip() for s in results]
+    except Exception as exc:
         log.warning("search_suggest failed for %r: %s", query, exc)
         return []
 
@@ -76,3 +76,4 @@ def validate_demand(keyword: str) -> dict:
         "trends": google_trends(keyword),
         "suggestions": search_suggest(keyword),
     }
+

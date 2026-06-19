@@ -24,7 +24,6 @@ from . import brain, insights
 from .config import get_settings
 from .generation import prompts, refine
 from .generation import script as script_gen
-from .ingestion import scraper
 from .ingestion.pipeline import ingest_source
 from .llm.base import LLMProvider
 from .llm.factory import require_llm
@@ -35,15 +34,15 @@ from .models import (
     ContentStatus,
     CreatorProfile,
     FeedbackKind,
+    LinkedInPost,
     Source,
-    Video,
 )
 
 log = logging.getLogger("brain.agent")
 
 # An outlier multiplier at/above this counts as "it performed" (matches the system's
 # standard proven-demand threshold used by the virality backtest).
-VIRAL_THRESHOLD = 3.0
+VIRAL_THRESHOLD = 2.0
 
 _noop: Callable[[str], None] = lambda _msg: None
 
@@ -130,7 +129,7 @@ def _learning_context(session: Session) -> str:
 
 
 def _agent_guidance(session: Session, profile: CreatorProfile, *, extra: str = "") -> str:
-    base = "Propose a fresh, original YouTube video idea grounded in the channels' proven demand"
+    base = "Propose a fresh, original LinkedIn post idea grounded in the profiles' proven content"
     if profile.niche:
         base += f" for the {profile.niche} niche"
     base += "."
@@ -140,8 +139,8 @@ def _agent_guidance(session: Session, profile: CreatorProfile, *, extra: str = "
 
 # ---- Generation ----
 
-def _thumbnail(llm: LLMProvider, title: str, angle: str, script_md: str) -> str:
-    system, prompt = prompts.thumbnail_prompt(title, angle, script_md)
+def _image_prompt(llm: LLMProvider, title: str, angle: str, post_text: str) -> str:
+    system, prompt = prompts.image_prompt(title, angle, post_text)
     return llm.complete(prompt, system=system).strip()
 
 
@@ -169,12 +168,12 @@ def _generate_one(
     )
     title = idea["title"]
     angle = idea.get("angle", "")
-    on_progress(f'writing script — "{title[:40]}"')
+    on_progress(f'writing post — "{title[:40]}"')
     doc = script_gen.generate_script(
         session, title=title, angle=angle, channel_id=primary_channel, llm=llm,
         on_progress=on_progress,
     )
-    on_progress("writing description + CTA")
+    on_progress("writing first comment + CTA")
     desc = script_gen.generate_description(
         session,
         title=title,
@@ -184,8 +183,8 @@ def _generate_one(
         cta=(profile.offer or None),
         llm=llm,
     )
-    on_progress("writing thumbnail prompt")
-    thumb = _thumbnail(llm, title, angle, doc["markdown"])
+    on_progress("writing image prompt")
+    thumb = _image_prompt(llm, title, angle, doc["markdown"])
 
     item = ContentItem(
         batch_id=batch_id,
@@ -251,9 +250,7 @@ def generate_batch(
                 ingest_source(
                     session, src,
                     max_new=settings.agent_max_videos_per_source,
-                    popular_k=settings.agent_popular_per_source,
                     comment_limit=settings.comment_limit,
-                    cap=True,
                     on_progress=_cb,
                 )
             except Exception as exc:  # one source shouldn't stop the batch
@@ -272,7 +269,7 @@ def generate_batch(
         None,
     )
     extra = (
-        f'Create a video specifically about: "{topic}". Treat this as the required subject.'
+        f'Create a LinkedIn post specifically about: "{topic}". Treat this as the required subject.'
         if topic
         else ""
     )
@@ -370,35 +367,24 @@ def decline(session: Session, item_id: int, reason: str, *, llm: LLMProvider | N
 
 # ---- Publish + measure (the reward loop) ----
 
-_VID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/|/embed/)([A-Za-z0-9_-]{11})")
-
-
-def _video_id_from_url(url: str) -> str | None:
-    m = _VID_RE.search(url or "")
-    return m.group(1) if m else None
-
-
 def _measure(session: Session, item: ContentItem, *, fetcher=None) -> ContentItem:
     """(Re)measure a published item's real outlier multiplier and compute the reward."""
-    vid = item.published_video_id
-    if not vid:
+    post_id = item.published_video_id
+    if not post_id:
         return item
 
-    video = session.get(Video, vid)
-    if video is None:  # not in the lake yet → scrape it once (metadata only, no comments)
-        fetch = fetcher or (lambda v: scraper.fetch_video(v, with_comments=False, comment_limit=0))
-        video = Video(**scraper.map_signals(fetch(vid)))
-        session.add(video)
-        session.commit()
+    post = session.get(LinkedInPost, post_id)
+    if post is None:
+        return item
 
     med = {b.channel_id: b.median_views for b in brain.channel_baselines(session)}.get(
-        video.channel_id, 0.0
+        post.author_id or "", 0.0
     )
-    if med > 0 and video.views > 0:
-        mult = round(video.views / med, 2)
+    if med > 0 and post.reactions > 0:
+        mult = round(post.reactions / med, 2)
         item.actual_multiplier = mult
         item.performed = mult >= VIRAL_THRESHOLD
-        item.reward = mult  # realized outlier = the reward magnitude
+        item.reward = mult
         item.status = ContentStatus.scored
         session.add(
             ContentFeedback(
@@ -422,12 +408,9 @@ def mark_published(
     video_id: str | None = None,
     fetcher=None,
 ) -> ContentItem:
-    """Attach the real published video, scrape it, and measure performance."""
+    """Attach the published LinkedIn post URL and measure performance."""
     item = _require_item(session, item_id)
-    vid = video_id or _video_id_from_url(url)
-    if not vid:
-        raise ValueError(f"could not extract a YouTube video id from URL: {url!r}")
-    item.published_video_id = vid
+    item.published_video_id = video_id or url
     item.published_url = url
     item.published_at = datetime.utcnow()
     item.status = ContentStatus.published
@@ -438,7 +421,7 @@ def mark_published(
 
 
 def rescore(session: Session, *, fetcher=None) -> int:
-    """Re-measure every published-but-not-yet-scored item (views accrue over time)."""
+    """Re-measure every published-but-not-yet-scored item (reactions accrue over time)."""
     pending = session.exec(
         select(ContentItem).where(ContentItem.status == ContentStatus.published)
     ).all()

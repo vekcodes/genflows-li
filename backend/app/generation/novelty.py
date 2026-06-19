@@ -1,9 +1,9 @@
-"""Novelty check for generated ideas — keeps output from being a near-copy of one existing video.
+"""Novelty check for generated ideas — keeps output from being a near-copy of an existing post.
 
-Cheap + dependency-free: compares a candidate title against the titles already in the Brain
-(scraped videos) and already in the content queue, using the max of a sequence-ratio and a
-token-set Jaccard. Used *alongside* the virality model: an idea must be both novel AND score
-well to survive. The virality model stays the numeric gate; this only removes rip-offs.
+Cheap + dependency-free: compares a candidate hook against the hooks already in the Brain
+(scraped posts) and already in the content queue, using the max of a sequence-ratio and a
+token-set Jaccard. Used *alongside* the engagement model: an idea must be both novel AND score
+well to survive. The engagement model stays the numeric gate; this only removes rip-offs.
 """
 from __future__ import annotations
 
@@ -12,10 +12,9 @@ from difflib import SequenceMatcher
 
 from sqlmodel import Session, select
 
-from ..models import ContentItem, Video
+from ..models import ContentItem, LinkedInPost
 
 _WORD = re.compile(r"[a-z0-9']+")
-# Common YouTube-title filler that shouldn't count toward "same title".
 _STOP = frozenset(
     "the a an to of for and or in on with how why what your you my is are this that these "
     "best top vs from at it i".split()
@@ -47,10 +46,12 @@ def max_similarity(title: str, existing: list[str]) -> float:
 
 
 def existing_titles(session: Session, channel_id: str | None = None) -> list[str]:
-    """Titles already known to the Brain: scraped videos + queued/proposed content items."""
-    vq = select(Video.title)
+    """Hooks already known to the Brain: scraped posts (text excerpts) + queued content items."""
+    pq = select(LinkedInPost.text)
     if channel_id:
-        vq = vq.where(Video.channel_id == channel_id)
-    titles = [t for t in session.exec(vq).all() if t]
+        pq = pq.where(LinkedInPost.author_id == channel_id)
+    # Use the first line of each post as the "title" for comparison.
+    raw = [t for t in session.exec(pq).all() if t]
+    titles = [(t.split("\n")[0][:120] if t else "") for t in raw]
     titles += [t for t in session.exec(select(ContentItem.title)).all() if t]
-    return titles
+    return [t for t in titles if t]

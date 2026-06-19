@@ -76,20 +76,6 @@ def _daily_rescore() -> None:
     log.info("rescored %s published item(s)", n)
 
 
-def _transcript_autofill() -> None:
-    """Backfill a bounded number of missing transcripts each tick (captions → Whisper)."""
-    from .config import get_settings
-    from .ingestion import transcripts
-
-    settings = get_settings()
-    if not settings.transcript_autofill_enabled:
-        return
-    with Session(engine) as session:
-        res = transcripts.backfill_missing(session, limit=settings.transcript_autofill_per_tick)
-    if res["total"]:
-        log.info("transcript autofill: %s fetched, %s unavailable", res["fetched"], res["unavailable"])
-
-
 def start_scheduler(interval_minutes: int | None = None) -> None:
     global _scheduler
     if _scheduler is not None:
@@ -97,20 +83,9 @@ def start_scheduler(interval_minutes: int | None = None) -> None:
     settings = get_settings()
     minutes = interval_minutes or settings.scheduler_interval_minutes
     _scheduler = BackgroundScheduler(daemon=True)
-    # max_instances=1 + coalesce: a long scrape never overlaps the next tick.
     _scheduler.add_job(
         _tick, "interval", minutes=minutes, id="recheck", max_instances=1, coalesce=True
     )
-    if settings.transcript_autofill_enabled:
-        # Drains missing transcripts a few at a time (restart-safe; never hogs the CPU).
-        _scheduler.add_job(
-            _transcript_autofill, "interval", minutes=settings.transcript_autofill_interval_minutes,
-            id="transcript_autofill", max_instances=1, coalesce=True,
-        )
-        log.info(
-            "transcript autofill on — %s every %smin",
-            settings.transcript_autofill_per_tick, settings.transcript_autofill_interval_minutes,
-        )
     if settings.agent_enabled:
         _scheduler.add_job(
             _weekly_content, "cron", day_of_week=settings.agent_weekly_day,

@@ -1,4 +1,4 @@
-"""Brain OS backend — a self-updating YouTube knowledge engine.
+"""Brain OS backend — a self-updating LinkedIn content engine.
 
 See ../../ARCHITECTURE.md. This package implements layers A–E (sources →
 ingestion → raw lake → processing → brain) and a skeleton of layer F (the

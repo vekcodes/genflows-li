@@ -73,30 +73,30 @@ export function ContentCard({ item, onChanged }: { item: ContentItem; onChanged:
         </div>
       )}
       {item.status === 'published' && (
-        <div className="perf perf-pending">Published — measuring performance as views accrue…</div>
+        <div className="perf perf-pending">Published — measuring performance as reactions accrue…</div>
       )}
       {item.declined_reason && (
         <div className="perf perf-loss">Declined: {item.declined_reason}</div>
       )}
 
       <button className="c-toggle" onClick={() => setOpen((o) => !o)}>
-        {open ? '▾ Hide' : '▸ Show'} script, description & thumbnail
+        {open ? '▾ Hide' : '▸ Show'} post, first comment & image prompt
       </button>
 
       {open && (
         <div className="c-body">
           <div className="deliverable">
             <div className="deliverable-head">
-              <span className="deliverable-label">Thumbnail prompt</span>
-              <button className="btn btn-ghost" onClick={() => copy(item.thumbnail_prompt)}>
+              <span className="deliverable-label">LinkedIn post text</span>
+              <button className="btn btn-ghost" onClick={() => copy(item.script_markdown)}>
                 ⧉ Copy
               </button>
             </div>
-            <div className="title-box">{item.thumbnail_prompt}</div>
+            <pre className="c-pre c-script">{item.script_markdown}</pre>
           </div>
           <div className="deliverable">
             <div className="deliverable-head">
-              <span className="deliverable-label">YouTube description + CTA</span>
+              <span className="deliverable-label">First comment CTA</span>
               <button className="btn btn-ghost" onClick={() => copy(item.description)}>
                 ⧉ Copy
               </button>
@@ -105,12 +105,12 @@ export function ContentCard({ item, onChanged }: { item: ContentItem; onChanged:
           </div>
           <div className="deliverable">
             <div className="deliverable-head">
-              <span className="deliverable-label">Script</span>
-              <button className="btn btn-ghost" onClick={() => copy(item.script_markdown)}>
+              <span className="deliverable-label">Image / visual prompt</span>
+              <button className="btn btn-ghost" onClick={() => copy(item.thumbnail_prompt)}>
                 ⧉ Copy
               </button>
             </div>
-            <pre className="c-pre c-script">{item.script_markdown}</pre>
+            <div className="title-box">{item.thumbnail_prompt}</div>
           </div>
         </div>
       )}
@@ -164,7 +164,7 @@ export function ContentCard({ item, onChanged }: { item: ContentItem; onChanged:
             <div className="c-inline">
               <input
                 className="input"
-                placeholder="Published YouTube URL (https://youtu.be/…)"
+                placeholder="Published LinkedIn post URL (https://linkedin.com/posts/…)"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />

@@ -54,9 +54,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Brain OS API",
+    title="LinkedIn Automation API",
     version=__version__,
-    summary="Self-updating YouTube knowledge engine — the contract consumer apps call.",
+    summary="Self-updating LinkedIn content engine — research competitor posts, mine insights, generate viral posts.",
     lifespan=lifespan,
 )
 

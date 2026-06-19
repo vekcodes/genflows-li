@@ -1,36 +1,28 @@
-# --- Brain OS backend (Layers A–E + F skeleton) ---
+# --- LinkedIn Automation backend ---
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.32,<1.0
 sqlmodel>=0.0.22,<0.1
 pydantic-settings>=2.6,<3.0
 
-# Ingestion
-yt-dlp>=2024.12.13
-youtube-transcript-api>=0.6.2
+# Ingestion — LinkedIn via Apify
+httpx>=0.27
 
 # Scheduler (continuous, incremental re-check)
 apscheduler>=3.10,<4.0
 
-# Virality model + backtester (Layer E ★) + local vector index (TF-IDF) + content-gap scorer
+# Virality model + backtester + local TF-IDF + content-gap scorer
 scikit-learn>=1.5,<2.0
 numpy>=1.26
 scipy>=1.11
 
-# Market demand (Layer 3) — Google Trends + search-suggest
+# Market demand — Google Trends + search-suggest
 pytrends>=4.9
-httpx>=0.27
 
-# Brain Wiki (Layer E qualitative) — YAML frontmatter for markdown pages
+# Brain Wiki — YAML frontmatter for markdown pages
 pyyaml>=6.0
 
-# Optional LLM fallback (API key). The default provider shells out to the
-# Claude Code CLI for subscription/OAuth auth and needs no package.
+# LLM (Anthropic API fallback; default uses Claude Code CLI)
 anthropic>=0.40,<1.0
 
-# Local transcript fallback (block-proof): transcribe downloaded audio on-device.
-# Uses CTranslate2 (no torch). Enable with BRAIN_TRANSCRIPT_WHISPER_ENABLED=true.
-faster-whisper>=1.0
-
-# Postgres driver — required when BRAIN_DATABASE_URL points at hosted Postgres
-# (Neon/Supabase) in the cloud. SQLite needs no driver, so this is cloud-only.
+# Postgres driver (cloud deployments only — SQLite needs no driver)
 psycopg2-binary>=2.9

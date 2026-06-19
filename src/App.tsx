@@ -25,7 +25,7 @@ export default function App() {
             </span>
             <div>
               <div className="brand-title">GenFlows</div>
-              <div className="brand-sub">Content Engine</div>
+              <div className="brand-sub">LinkedIn Automation</div>
             </div>
           </div>
 

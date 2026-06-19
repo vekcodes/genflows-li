@@ -1,7 +1,8 @@
-"""Layer E LLM mining: comment pain-points · title/format patterns · style-cards.
+"""Layer E LLM mining — LinkedIn edition.
 
-Each writes reusable Brain state (DB tables) and takes an injectable `llm` so it can be
-unit-tested with a fake provider. Real runs use Claude via the configured provider.
+Mines: comment pain-points · post format patterns · author style cards.
+Each writes reusable Brain state (DB tables) and takes an injectable `llm`
+so it can be unit-tested with a fake provider.
 """
 from __future__ import annotations
 
@@ -12,34 +13,30 @@ from .llm.base import LLMProvider
 from .llm.factory import require_llm
 from .llm.parse import complete_json
 from .generation import prompts
-from .models import Comment, FormatPattern, PainPoint, StyleCard, Transcript, Video
+from .models import FormatPattern, LinkedInPost, PainPoint, PostComment, StyleCard, Source
 
 MAX_COMMENTS = 200
-MAX_TITLES = 40
-MAX_TRANSCRIPT_CHARS = 6000
+MAX_POSTS = 40
+MAX_POST_CHARS = 8000
 
 
-def _video_ids_for_niche(session: Session, niche: str | None) -> set[str] | None:
+def _post_ids_for_niche(session: Session, niche: str | None) -> set[str] | None:
     if not niche:
         return None
-    from .models import Source
-
     sids = session.exec(select(Source.id).where(Source.niche == niche)).all()
     if not sids:
         return set()
-    return set(session.exec(select(Video.id).where(Video.source_id.in_(sids))).all())
+    return set(session.exec(select(LinkedInPost.id).where(LinkedInPost.source_id.in_(sids))).all())
 
-
-# ---- Mining ----
 
 def mine_pain_points(
     session: Session, *, niche: str | None = None, k: int = 12, llm: LLMProvider | None = None
 ) -> list[PainPoint]:
     llm = llm or require_llm()
-    vid_filter = _video_ids_for_niche(session, niche)
+    pid_filter = _post_ids_for_niche(session, niche)
 
-    q = select(Comment).order_by(Comment.likes.desc()).limit(MAX_COMMENTS)
-    comments = [c for c in session.exec(q).all() if vid_filter is None or c.video_id in vid_filter]
+    q = select(PostComment).order_by(PostComment.likes.desc()).limit(MAX_COMMENTS)
+    comments = [c for c in session.exec(q).all() if pid_filter is None or c.post_id in pid_filter]
     if not comments:
         return []
 
@@ -64,16 +61,16 @@ def mine_pain_points(
 
 
 def mine_patterns(
-    session: Session, *, niche: str | None = None, min_multiplier: float = 3.0,
+    session: Session, *, niche: str | None = None, min_multiplier: float = 2.0,
     llm: LLMProvider | None = None,
 ) -> list[FormatPattern]:
     llm = llm or require_llm()
-    outliers = brain.outliers(session, min_multiplier=min_multiplier, limit=MAX_TITLES)
-    if not outliers:
+    high_engagement = brain.outliers(session, min_multiplier=min_multiplier, limit=MAX_POSTS)
+    if not high_engagement:
         return []
 
-    by_title = {o.title.strip().lower(): o for o in outliers}
-    lines = "\n".join(f"{o.multiplier}x  —  {o.title.strip()}" for o in outliers)
+    by_text = {o.title.strip().lower(): o for o in high_engagement}
+    lines = "\n".join(f"{o.multiplier}x  —  {o.title.strip()}" for o in high_engagement)
     system, prompt = prompts.patterns(lines)
     data = complete_json(llm, prompt, system=system)
 
@@ -81,7 +78,7 @@ def mine_patterns(
     rows: list[FormatPattern] = []
     for item in data:
         examples = [str(t).strip() for t in (item.get("example_titles") or [])]
-        matched = [by_title[t.lower()] for t in examples if t.lower() in by_title]
+        matched = [by_text[t.lower()] for t in examples if t.lower() in by_text]
         avg = round(sum(o.multiplier for o in matched) / len(matched), 2) if matched else 0.0
         rows.append(
             FormatPattern(
@@ -101,24 +98,25 @@ def mine_patterns(
 def mine_style_card(
     session: Session, *, channel_id: str, llm: LLMProvider | None = None
 ) -> StyleCard | None:
+    """Extract a style card from a LinkedIn author's top posts."""
     llm = llm or require_llm()
-    rows = session.exec(
-        select(Transcript.text, Video.channel_name)
-        .join(Video, Video.id == Transcript.video_id)
-        .where(Video.channel_id == channel_id)
-        .limit(8)
+    posts = session.exec(
+        select(LinkedInPost)
+        .where(LinkedInPost.author_id == channel_id)
+        .order_by(LinkedInPost.reactions.desc())
+        .limit(10)
     ).all()
-    if not rows:
+    if not posts:
         return None
 
-    channel_name = next((r[1] for r in rows if r[1]), channel_id)
-    excerpt = "\n---\n".join(t for t, _ in rows)[:MAX_TRANSCRIPT_CHARS]
-    system, prompt = prompts.style_card(channel_name, excerpt)
+    author_name = next((p.author_name for p in posts if p.author_name), channel_id)
+    excerpt = "\n---\n".join(p.text for p in posts)[:MAX_POST_CHARS]
+    system, prompt = prompts.style_card(author_name, excerpt)
     data = complete_json(llm, prompt, system=system)
 
     existing = session.get(StyleCard, channel_id)
     card = existing or StyleCard(channel_id=channel_id)
-    card.channel_name = channel_name
+    card.channel_name = author_name
     card.tone = str(data.get("tone", "")).strip()
     card.pacing = str(data.get("pacing", "")).strip()
     card.hooks = [str(h).strip() for h in (data.get("hooks") or [])]
@@ -128,8 +126,6 @@ def mine_style_card(
     session.refresh(card)
     return card
 
-
-# ---- Read helpers (used by generation + the API) ----
 
 def list_pain_points(session: Session, niche: str | None = None) -> list[PainPoint]:
     q = select(PainPoint).order_by(PainPoint.frequency.desc())
