@@ -149,12 +149,12 @@ export default function Assistant() {
               <h1>
                 What should we <span className="accent">make</span>?
               </h1>
-              <p className=”muted”>
-                Add competitor profiles on the left, then ask — e.g.{‘ ‘}
-                <em>”Generate me 3 LinkedIn posts about cold outreach.”</em> It scrapes{‘ ‘}
+              <p className="muted">
+                Add competitor profiles on the left, then ask &mdash; e.g.{' '}
+                <em>&ldquo;Generate me 3 LinkedIn posts about cold outreach.&rdquo;</em> It scrapes{' '}
                 <strong>all posts</strong> (text + comments), studies what performs and
-                what’s trending now, then researches each idea and refines it until it clears the
-                engagement bar — writing posts <strong>one at a time</strong>. This is deliberate,
+                what&apos;s trending now, then researches each idea and refines it until it clears the
+                engagement bar &mdash; writing posts <strong>one at a time</strong>. This is deliberate,
                 so a fresh profile can take a while.
               </p>
             </div>
