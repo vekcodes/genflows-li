@@ -83,7 +83,7 @@ def generate_script(
 
     def _expand_one(s: dict) -> str:
         sys_e, p_e = prompts.expand_section(
-            title, style, outline_summary, s["beat"], s["heading"], s["intent"]
+            title, angle, style, outline_summary, s["beat"], s["heading"], s["intent"]
         )
         return llm.complete(p_e, system=sys_e).strip()
 
@@ -93,10 +93,12 @@ def generate_script(
             futures[future]["content"] = future.result()
             on_progress(f"post: writing sections {done}/{total}")
 
-    # 3) Assemble and polish the full post.
-    on_progress("post: assembling")
-    sys_a, p_a = prompts.assemble_post(title, sections, style)
-    post_text = llm.complete(p_a, system=sys_a).strip()
+    # 3) Assemble and (optionally) polish the full post.
+    post_text = ""
+    if polish:
+        on_progress("post: assembling")
+        sys_a, p_a = prompts.assemble_post(title, sections, style)
+        post_text = llm.complete(p_a, system=sys_a).strip()
 
     if not post_text:
         post_text = "\n\n".join(s.get("content", "") for s in sections)

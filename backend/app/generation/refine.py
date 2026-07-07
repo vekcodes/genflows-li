@@ -22,7 +22,7 @@ _DRIVER_PHRASES = {
     "has_number": "a specific number in the hook",
     "is_contrarian": "a contrarian / unpopular-opinion angle",
     "is_question": "a curiosity-gap question",
-    "has_emoji": "strategic emoji use",
+    "has_emoji": "an emoji or two, only where the creator's own posts use them",
     "has_cta": "a strong closing call-to-action",
     "is_story": "a personal story framing",
     "is_how_to": "a concrete how-to or framework",
