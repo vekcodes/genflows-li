@@ -163,7 +163,7 @@ def _via_cloudflare(prompt: str, width: int, height: int, seed: int) -> Generate
     res = httpx.post(
         f"https://api.cloudflare.com/client/v4/accounts/{s.cloudflare_account_id}/ai/run/{model}",
         headers={"Authorization": f"Bearer {s.cloudflare_api_token}"},
-        json={"prompt": prompt, "steps": 6},
+        json={"prompt": prompt, "steps": 8},   # 8 is the endpoint maximum; 12 is rejected
         timeout=s.image_timeout_sec,
     )
     if res.status_code >= 400:

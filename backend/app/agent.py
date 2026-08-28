@@ -153,13 +153,21 @@ def _image_brief(llm: LLMProvider, title: str, angle: str, post_text: str) -> di
         data = {}
 
     render = str(data.get("render_prompt") or "").strip()
+    if render:
+        # The framing rules are appended here rather than trusted to the model, which reliably
+        # filled the lower third - exactly where the headline is composited. Trim the subject
+        # first so the tail always survives imagegen's MAX_PROMPT_CHARS truncation.
+        budget = imagegen.MAX_PROMPT_CHARS - len(prompts.COMPOSITION_TAIL)
+        render = render[:budget].rstrip().rstrip(".") + "." + prompts.COMPOSITION_TAIL
     if not render:
+        # Mirrors the rules in prompts.image_prompt: no UI nouns (they make FLUX draw garbled
+        # lettering), no "no text" negation (naming text summons it), colour named in words
+        # rather than hex (hex drifts the render to black), subject kept out of the lower third.
         render = (
-            f"Premium B2B tech visual for a LinkedIn post about \"{title}\": abstract glowing "
-            "line-art pipeline and dashboard shapes on a deep navy #0A1F35 background, one "
-            "orange #E67E22 focal accent, cinematic soft light, generous negative space in the "
-            "lower third. No text, no letters, no numbers, no logos, no watermarks."
-        )
+            "A wide ribbon of warm amber-orange light folding like liquid metal across the "
+            "upper half of the frame, catching sharp specular highlights along its edge. "
+            "Volumetric haze, cinematic side lighting, shallow depth of field."
+        ) + prompts.COMPOSITION_TAIL
     overlay = str(data.get("overlay_text") or "").strip()
     accent = str(data.get("accent_word") or "").strip()
     words = overlay.split()

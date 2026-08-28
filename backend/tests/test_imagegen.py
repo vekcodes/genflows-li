@@ -58,7 +58,7 @@ class _Swap:
 
 
 def _stub(data: bytes = PNG, *, provider: str = "pollinations", model: str = "flux"):
-    from app.generation import imagegen
+    from app.generation import imagegen, prompts
 
     def _fn(prompt, width, height, seed):
         assert prompt, "provider called with an empty prompt"
@@ -228,6 +228,7 @@ def test_generation_attaches_image_brief():
     import json
 
     from app import agent
+    from app.generation import prompts
     from app.models import ContentImage
 
     class FakeLLM:
@@ -261,7 +262,11 @@ def test_generation_attaches_image_brief():
         row = session.get(ContentImage, item.id)
 
     assert row is not None, "no image row created for the generated item"
-    assert item.thumbnail_prompt == "navy pipeline line-art, orange node, no text, no logos"
+    # The model writes the subject; the framing rules are appended in code (see
+    # prompts.COMPOSITION_TAIL), because the model reliably filled the lower third that the
+    # headline is composited into.
+    assert item.thumbnail_prompt.startswith("navy pipeline line-art, orange node, no text, no logos")
+    assert item.thumbnail_prompt.endswith(prompts.COMPOSITION_TAIL)
     assert row.overlay_text == "STOP GUESSING" and row.accent_word == "GUESSING"
     assert row.status == "error" and "disabled" in row.error
     print("generation attaches the visual brief: ok")
@@ -279,9 +284,16 @@ def test_image_brief_falls_back_on_bad_json():
         def complete(self, prompt: str, *, system: str | None = None) -> str:
             return "Sure! Here is a nice image idea for you."
 
+    from app.generation import prompts
+
     brief = agent._image_brief(Prose(), "7 cold email mistakes", "fix them", "post text")
-    assert "No text" in brief["render_prompt"]
-    assert "7 cold email mistakes" in brief["render_prompt"]
+    render = brief["render_prompt"]
+    # The fallback obeys the same rules as the model-written prompt: it carries the framing tail,
+    # never says "no text" (naming text is what makes FLUX draw it), and never interpolates the
+    # post title -- feeding words to a text-to-image model is the surest way to get lettering.
+    assert render.endswith(prompts.COMPOSITION_TAIL)
+    assert "no text" not in render.lower()
+    assert "7 cold email mistakes" not in render
     print("image brief falls back when the LLM returns prose: ok")
 
 

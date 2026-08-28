@@ -207,38 +207,99 @@ def first_comment(title: str, angle: str, post_text: str, niche: str | None, cta
     return system, prompt
 
 
+# Appended verbatim to every render prompt (see `agent._image_brief`) rather than left to the
+# model to remember. Measured against Cloudflare's FLUX.1-schnell: naming the colour in words
+# holds the navy that a bare hex code drifts to black, and stating the empty bottom third twice
+# is what actually keeps the headline area clear.
+COMPOSITION_TAIL = (
+    " The background is a rich deep navy blue, evenly lit, clearly blue rather than black. "
+    "Every form in the picture sits entirely within the upper two thirds of the frame. The "
+    "bottom third is completely empty flat navy blue - no objects, no clusters, no detail, no "
+    "glow, nothing at all in the lower third. Every surface is smooth, blank and unmarked. "
+    "Square 1:1 composition, premium editorial 3D render, cinematic lighting, subtle grain."
+)
+
+# The visual vocabulary. Each post is offered a rotating subset (see `image_prompt`) so a feed
+# of posts does not collapse onto one look - left to itself the model picks the same
+# signal-versus-noise cluster almost every time.
+METAPHORS: list[tuple[str, str]] = [
+    ("a choice or a split path",
+     "thick polished glass conduits sweeping across the frame, one branching away from the rest"),
+    ("growth, scale or ranking",
+     "slender glowing monoliths of varying heights arranged in receding perspective"),
+    ("filtering or qualifying",
+     "a dense stream of fine glowing particles funnelling through a narrow aperture"),
+    ("momentum or flow",
+     "a wide ribbon of light folding through the air like liquid metal"),
+    ("systems and orchestration",
+     "concentric rings orbiting a single bright focal sphere, thin elegant arcs at varying angles"),
+    ("signal versus noise",
+     "one brilliantly lit form raised above many dim identical ones"),
+    ("compounding over time",
+     "nested arcs layering outward from a single origin point"),
+    ("friction or breakage",
+     "a clean geometric form fracturing into separating shards"),
+]
+
+
 def image_prompt(title: str, angle: str, post_text: str) -> tuple[str, str]:
     """Brief for the post visual, as JSON: a text-free render prompt + the overlay headline.
 
-    The render prompt deliberately forbids letters in the generated image. Open text-to-image
-    models (FLUX included) garble typography, and LinkedIn images live or die on a readable
-    headline — so the app burns the 2-4 word overlay on afterwards, in the exact brand fonts
-    and hexes, over a clean generated background.
+    Three hard-won constraints shape this brief, all measured against FLUX.1-schnell:
+
+    1. Diffusion models do not obey negation. Telling FLUX "NO text" made it *more* likely to
+       render garbled pseudo-labels, because the UI nouns in the old brief (dashboard, chart,
+       interface) carry strong text priors. Banning those nouns and positively describing blank,
+       unmarked surfaces removes lettering completely.
+    2. Composition is not left to the model. It reliably filled the lower third with scenery,
+       which is where the headline is composited - so the framing rules live in
+       `COMPOSITION_TAIL` and are appended in code instead.
+    3. Asked to choose freely from the whole vocabulary, the model picked the same metaphor for
+       almost every post. Each post is therefore offered a rotating subset of three, chosen by a
+       stable hash of the title, and picks the best fit among those.
     """
+    # Stable per-title rotation: the same post always gets the same shortlist, different posts
+    # get different ones. Not random, so a re-render does not silently change the look.
+    seed = sum(ord(c) for c in title) if title else 0
+    shortlist = [METAPHORS[(seed + i * 3) % len(METAPHORS)] for i in range(3)]
+    options = "\n".join(f"- {meaning} -> {visual}" for meaning, visual in shortlist)
+
     system = (
-        "You are a LinkedIn visual content director for GenFlows, a B2B GTM-engineering agency. "
-        "You brief a text-to-image model (FLUX) and follow the GenFlows brand system exactly. "
-        "You always answer with valid JSON only."
+        "You are an art director for GenFlows, a B2B GTM-engineering agency, briefing the "
+        "FLUX text-to-image model for a LinkedIn feed image. You write prompts the way a "
+        "photographer describes a set: physical materials, light, and composition - never "
+        "software screens. You always answer with valid JSON only."
     )
     prompt = (
         f"Post hook: {title}\n"
         f"Angle: {angle}\n"
         f"Post excerpt:\n\"\"\"\n{post_text[:800]}\n\"\"\"\n\n"
-        "GENFLOWS BRAND SYSTEM (non-negotiable):\n"
-        "- Background: deep navy #0A1F35, flat or subtle gradient.\n"
-        "- ONE accent color only: orange #E67E22 for the focal element.\n"
-        "- Aesthetic: clean, premium, engineering/GTM look - pipelines, dashboards, "
-        "flow diagrams as glowing line-art; generous negative space, especially in the "
-        "lower third (a headline is composited there afterwards).\n"
-        "- Square 1:1 composition, LinkedIn feed-ready.\n\n"
-        "CRITICAL: the generated image must contain NO text, NO letters, NO numbers, NO words, "
-        "NO logos, NO watermarks, NO UI labels - the headline is added later by the app. "
-        "Say so explicitly at the end of the render prompt.\n\n"
+
+        "STEP 1 - Pick whichever of these three visual metaphors best matches what this post "
+        f"actually argues:\n{options}\n\n"
+
+        "STEP 2 - Write the render prompt as ONE paragraph describing ONLY the subject: the "
+        "metaphor as a physical object, its material (polished glass, liquid metal, volumetric "
+        "light, fine particles), the lighting (rim light, side light, volumetric haze, specular "
+        "highlights), then depth of field and contrast. Make the subject large and confident - "
+        "it should fill the upper half, not float small in the middle.\n\n"
+
+        "RULES:\n"
+        "- Describe the subject ONLY. Do NOT write the background colour, the framing, the "
+        "aspect ratio or the render style - those are appended automatically afterwards.\n"
+        "- Keep it under 500 characters.\n"
+        "- Exactly ONE accent colour: warm amber-orange. No other hues.\n"
+        "- If your metaphor involves several forms, they all stay in the upper two thirds. "
+        "Never describe anything resting on the ground or filling the bottom of the frame.\n"
+        "- NEVER use these words, they make the model draw garbled lettering: dashboard, chart, "
+        "graph, screen, interface, UI, monitor, display, label, sign, logo, button, text, "
+        "typography, letter, number, word. Describe blank unmarked forms instead.\n"
+        "- Do NOT write a negative instruction such as 'no text' - naming text makes it appear. "
+        "Describe only what IS in frame.\n\n"
+
         "Return ONLY this JSON:\n"
         "{\n"
-        '  "render_prompt": "one vivid paragraph for the image model: subject, composition, '
-        'lighting, materials, colors by hex, negative space in the lower third, and the '
-        'no-text/no-logo instruction",\n'
+        '  "render_prompt": "one vivid paragraph following STEP 2 and every rule above",\n'
         '  "overlay_text": "the headline burned onto the image - 2 to 4 words, uppercase, '
         'concrete, earns the click",\n'
         '  "accent_word": "exactly one word copied verbatim from overlay_text, rendered in '
