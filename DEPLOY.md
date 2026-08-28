@@ -32,7 +32,11 @@ on a real URL now; harden later (see bottom).
 3. In the service's **Environment**, set the two secrets:
    - `BRAIN_ANTHROPIC_API_KEY` = `sk-ant-...`
    - `BRAIN_APIFY_TOKEN` = `apify_api_...`
-4. Deploy. Open the URL. Done.
+4. *(Optional, free)* For FLUX-quality post images, set `BRAIN_CLOUDFLARE_ACCOUNT_ID` +
+   `BRAIN_CLOUDFLARE_API_TOKEN` (Workers AI: free, no card, ~500 images/day). Alternatives:
+   `BRAIN_HUGGINGFACE_API_KEY` or `BRAIN_POLLINATIONS_TOKEN`. Without any of them images still
+   render, via Pollinations' keyless tier (lower quality, 768px).
+5. Deploy. Open the URL. Done.
 
 ## Alternative: Railway (also Docker, one click)
 `railway init` → `railway up` (uses the same `Dockerfile`), then set the same two env vars in the

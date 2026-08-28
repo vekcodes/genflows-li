@@ -409,3 +409,61 @@
     display: none;
   }
 }
+
+/* ---- Post image (free FLUX render + brand headline composited on canvas) ---- */
+.img-provider {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'SF Mono', ui-monospace, Consolas, monospace;
+}
+.img-frame {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--gf-navy);
+  line-height: 0;
+}
+.img-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.img-empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--muted);
+  padding: 26px 16px;
+  text-align: center;
+  font-size: 13px;
+}
+.img-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+}
+.img-field {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.img-field > span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.img-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.img-check .input {
+  min-width: 180px;
+}

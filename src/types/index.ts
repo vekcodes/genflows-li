@@ -182,6 +182,23 @@ export type ContentStatus =
   | 'scored'
   | 'archived'
 
+/** Metadata for the post image rendered by a free text-to-image model (bytes fetched separately). */
+export interface ContentImage {
+  item_id: number
+  status: 'pending' | 'ready' | 'error'
+  provider: string
+  model: string
+  prompt: string
+  overlay_text: string   // 2-4 word headline composited onto the image
+  accent_word: string    // the one word drawn in brand orange
+  mime: string
+  width: number
+  height: number
+  bytes_len: number
+  error: string
+  updated_at: string
+}
+
 export interface ContentItem {
   id: number
   batch_id: string
@@ -210,6 +227,7 @@ export interface ContentItem {
   reward: number | null
   created_at: string
   updated_at: string
+  image: ContentImage | null
 }
 
 export interface ContentRun {

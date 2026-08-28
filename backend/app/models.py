@@ -10,7 +10,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, LargeBinary
 from sqlmodel import Field, SQLModel
 
 
@@ -158,6 +158,31 @@ class ContentItem(SQLModel, table=True):
     performed: Optional[bool] = None
     reward: Optional[float] = None
 
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ContentImage(SQLModel, table=True):
+    """The rendered post visual for one ContentItem — one row per item, image bytes included.
+
+    Kept out of ContentItem so /content/queue stays a small JSON payload: the list endpoints
+    return this row's metadata only, and the bytes are fetched per item from
+    GET /content/{id}/image. Storing the blob in the DB (rather than on disk) is what makes it
+    survive the ephemeral filesystem of a serverless deploy.
+    """
+    item_id: Optional[int] = Field(default=None, primary_key=True, foreign_key="contentitem.id")
+    status: str = "pending"          # pending | ready | error
+    provider: str = ""              # together | huggingface | pollinations
+    model: str = ""
+    prompt: str = ""                # render prompt actually sent to the image model
+    overlay_text: str = ""          # 2-4 word headline the app burns onto the image
+    accent_word: str = ""           # the single word drawn in brand orange
+    mime: str = ""
+    width: int = 0
+    height: int = 0
+    bytes_len: int = 0
+    error: str = ""
+    data: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

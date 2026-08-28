@@ -13,6 +13,7 @@ import json
 import os
 
 os.environ.setdefault("BRAIN_LLM_PROVIDER", "none")
+os.environ.setdefault("BRAIN_IMAGE_GEN_ENABLED", "false")  # no network in tests
 
 
 class FakeLLM:
@@ -29,27 +30,34 @@ class FakeLLM:
     def complete(self, prompt: str, *, system: str | None = None) -> str:
         self.prompts.append(prompt)
         if "stronger idea" in prompt:  # refine_idea
-            return json.dumps({"title": "7 Editing Mistakes Killing Your Retention",
+            return json.dumps({"title": "7 Cold Email Mistakes Killing Your Reply Rate",
                                "angle": "fix them fast", "format": "listicle", "evidence": ["proven listicle"]})
-        if "Propose" in prompt and "video ideas" in prompt:  # ideas
+        if "LinkedIn post ideas" in prompt:  # ideas
             return json.dumps([
-                {"title": "7 Editing Mistakes Killing Your Retention", "angle": "fix them fast",
+                {"title": "7 Cold Email Mistakes Killing Your Reply Rate", "angle": "fix them fast",
                  "format": "listicle", "evidence": ["proven listicle format"]},
             ])
-        if "Outline the video" in prompt:  # outline
+        if "Plan the post as ordered sections" in prompt:  # outline
             return json.dumps([
                 {"beat": "Hook", "heading": "Cold open", "intent": "grab attention"},
                 {"beat": "Body", "heading": "Mistake 1", "intent": "first fix"},
-                {"beat": "CTA", "heading": "Close", "intent": "subscribe"},
+                {"beat": "CTA", "heading": "Close", "intent": "book a call"},
             ])
-        if "Write the script for THIS beat only" in prompt:  # expand
-            return "Spoken narration for this beat."
-        if "Tighten the following script" in prompt:  # polish
-            return prompt.split("markdown only:\n\n", 1)[-1]
-        if "Write the YouTube description" in prompt:  # description
-            return "Learn retention editing fast.\n\n👉 Book a call: [BOOKING LINK]\n\n#editing"
-        if "image-generation prompt for the thumbnail" in prompt:  # thumbnail
-            return "Close-up shocked editor, bold text 'STOP THIS', high-contrast orange/navy, dramatic light."
+        if "Write the content for THIS section only" in prompt:  # expand
+            return "One short paragraph for this section."
+        if "Assemble the sections below" in prompt:  # assemble
+            return "Hook line.\n\nBody paragraph.\n\nClosing ask."
+        if "Tighten the following LinkedIn post" in prompt:  # polish
+            return prompt.split("only:\n\n", 1)[-1]
+        if "Write the first comment" in prompt:  # first-comment CTA
+            return "Here's the one fix that moved the needle.\n\n👉 Book a call: [BOOKING LINK]"
+        if "render_prompt" in prompt:  # image brief
+            return json.dumps({
+                "render_prompt": "Glowing navy #0A1F35 pipeline line-art, one orange #E67E22 node, "
+                                 "negative space lower third. No text, no letters, no logos.",
+                "overlay_text": "STOP GUESSING",
+                "accent_word": "GUESSING",
+            })
         return "{}"
 
 
@@ -118,20 +126,24 @@ def test_decline_regenerates_with_reason():
 
 def test_publish_measures_reward_and_memory():
     from app import agent
-    from app.models import ContentFeedback, ContentStatus, Video
+    from app.models import ContentFeedback, ContentStatus, LinkedInPost
     from sqlmodel import select
 
     session = _session()
-    # The creator's channel baseline: median of [800,1000,9000] = 1000; the published video is 9x.
-    for vid, views in [("base_a", 800), ("base_b", 1000), ("myvid000001", 9000)]:
-        session.add(Video(id=vid, channel_id="UC_me", channel_name="Me", title=vid, views=views))
+    # The author's baseline: median of [800,1000,9000] = 1000; the published post is 9x.
+    for pid, reactions in [("base_a", 800), ("base_b", 1000), ("mypost0001", 9000)]:
+        session.add(
+            LinkedInPost(id=pid, author_id="me-slug", author_name="Me", text=pid, reactions=reactions)
+        )
     session.commit()
 
     [item] = agent.generate_batch(session, llm=FakeLLM(), n=1, refresh=False)
     agent.approve(session, item.id)
 
-    # video already in the lake → no network fetch needed
-    out = agent.mark_published(session, item.id, url="https://youtu.be/myvid000001", video_id="myvid000001")
+    # post already in the lake → no network fetch needed
+    out = agent.mark_published(
+        session, item.id, url="https://linkedin.com/posts/mypost0001", video_id="mypost0001"
+    )
     assert out.status == ContentStatus.scored, out.status
     assert out.actual_multiplier == 9.0
     assert out.performed is True

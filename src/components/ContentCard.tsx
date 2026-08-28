@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ContentItem } from '@/types'
 import { approveItem, declineItem, publishItem, rescoreItems } from '@/services/api'
+import { PostImage } from './PostImage'
 import { Pill } from './ui'
 
 function scoreTone(score: number | null): string {
@@ -80,7 +81,7 @@ export function ContentCard({ item, onChanged }: { item: ContentItem; onChanged:
       )}
 
       <button className="c-toggle" onClick={() => setOpen((o) => !o)}>
-        {open ? '▾ Hide' : '▸ Show'} post, first comment & image prompt
+        {open ? '▾ Hide' : '▸ Show'} post, first comment & image
       </button>
 
       {open && (
@@ -103,15 +104,7 @@ export function ContentCard({ item, onChanged }: { item: ContentItem; onChanged:
             </div>
             <pre className="c-pre">{item.description}</pre>
           </div>
-          <div className="deliverable">
-            <div className="deliverable-head">
-              <span className="deliverable-label">Image / visual prompt</span>
-              <button className="btn btn-ghost" onClick={() => copy(item.thumbnail_prompt)}>
-                ⧉ Copy
-              </button>
-            </div>
-            <div className="title-box">{item.thumbnail_prompt}</div>
-          </div>
+          <PostImage item={item} />
         </div>
       )}
 

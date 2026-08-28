@@ -208,11 +208,17 @@ def first_comment(title: str, angle: str, post_text: str, niche: str | None, cta
 
 
 def image_prompt(title: str, angle: str, post_text: str) -> tuple[str, str]:
-    """A ready-to-use image-generation prompt for a LinkedIn post image (GenFlows-branded)."""
+    """Brief for the post visual, as JSON: a text-free render prompt + the overlay headline.
+
+    The render prompt deliberately forbids letters in the generated image. Open text-to-image
+    models (FLUX included) garble typography, and LinkedIn images live or die on a readable
+    headline — so the app burns the 2-4 word overlay on afterwards, in the exact brand fonts
+    and hexes, over a clean generated background.
+    """
     system = (
         "You are a LinkedIn visual content director for GenFlows, a B2B GTM-engineering agency. "
-        "You write a single, vivid image-generation prompt (for Midjourney/DALL·E) "
-        "that makes a high-CTR LinkedIn post image AND follows the GenFlows brand system exactly."
+        "You brief a text-to-image model (FLUX) and follow the GenFlows brand system exactly. "
+        "You always answer with valid JSON only."
     )
     prompt = (
         f"Post hook: {title}\n"
@@ -221,14 +227,23 @@ def image_prompt(title: str, angle: str, post_text: str) -> tuple[str, str]:
         "GENFLOWS BRAND SYSTEM (non-negotiable):\n"
         "- Background: deep navy #0A1F35, flat or subtle gradient.\n"
         "- ONE accent color only: orange #E67E22 for the focal element.\n"
-        "- Text overlay: 2-4 words MAX in heavy geometric sans-serif, white #FFFFFF, "
-        "with exactly ONE word in orange #E67E22.\n"
-        "- Aesthetic: clean, premium, engineering/GTM look — pipelines, dashboards, "
-        "flow diagrams as glowing line-art; generous negative space.\n"
-        "- LinkedIn 1:1 square (1200x1200) or 1.91:1 landscape (1200x628).\n\n"
-        "Write ONE image-generation prompt obeying ALL rules above. "
-        "Specify: subject, the exact overlay text, which word is orange, colors by hex. "
-        "Return ONLY the prompt text — no preamble, no quotes."
+        "- Aesthetic: clean, premium, engineering/GTM look - pipelines, dashboards, "
+        "flow diagrams as glowing line-art; generous negative space, especially in the "
+        "lower third (a headline is composited there afterwards).\n"
+        "- Square 1:1 composition, LinkedIn feed-ready.\n\n"
+        "CRITICAL: the generated image must contain NO text, NO letters, NO numbers, NO words, "
+        "NO logos, NO watermarks, NO UI labels - the headline is added later by the app. "
+        "Say so explicitly at the end of the render prompt.\n\n"
+        "Return ONLY this JSON:\n"
+        "{\n"
+        '  "render_prompt": "one vivid paragraph for the image model: subject, composition, '
+        'lighting, materials, colors by hex, negative space in the lower third, and the '
+        'no-text/no-logo instruction",\n'
+        '  "overlay_text": "the headline burned onto the image - 2 to 4 words, uppercase, '
+        'concrete, earns the click",\n'
+        '  "accent_word": "exactly one word copied verbatim from overlay_text, rendered in '
+        'orange #E67E22"\n'
+        "}"
     )
     return system, prompt
 

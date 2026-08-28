@@ -7,6 +7,7 @@ import type {
   BacktestReport,
   BrainStatus,
   ContentGap,
+  ContentImage,
   ContentItem,
   ContentRun,
   ContentStatus,
@@ -231,6 +232,34 @@ export const scheduleItem = (id: number, when: string) =>
   req<ContentItem>(`/content/${id}/schedule`, { method: 'POST', body: JSON.stringify({ when }) })
 export const publishItem = (id: number, url: string) =>
   req<ContentItem>(`/content/${id}/publish`, { method: 'POST', body: JSON.stringify({ url }) })
+// ---- Post image (rendered server-side by a free FLUX endpoint) ----
+// The image route is behind the same X-API-Key gate as the rest of the API, so an
+// <img src> can't load it directly — fetch the bytes and hand the caller an object URL.
+export async function fetchItemImage(id: number): Promise<string | null> {
+  const headers: Record<string, string> = {}
+  const key = apiKey()
+  if (key) headers['x-api-key'] = key
+  let res: Response
+  try {
+    res = await fetch(`${BASE}/content/${id}/image`, { headers })
+  } catch {
+    throw new ApiError(0, `Cannot reach the Brain API at ${BASE}.`)
+  }
+  if (res.status === 404) return null
+  if (!res.ok) throw new ApiError(res.status, `Could not load image (${res.status}).`)
+  return URL.createObjectURL(await res.blob())
+}
+
+export interface ImageGenBody {
+  prompt?: string
+  overlay_text?: string
+  accent_word?: string
+  width?: number
+  height?: number
+}
+export const generateItemImage = (id: number, body: ImageGenBody = {}) =>
+  req<ContentImage>(`/content/${id}/image`, { method: 'POST', body: JSON.stringify(body) })
+
 export const rescoreItems = () => req<{ updated: number }>('/content/rescore', { method: 'POST' })
 export const getProfile = () => req<CreatorProfile>('/content/profile')
 export const updateProfile = (body: Partial<CreatorProfile>) =>

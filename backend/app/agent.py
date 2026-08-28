@@ -22,13 +22,15 @@ from sqlmodel import Session, select
 
 from . import brain, insights
 from .config import get_settings
-from .generation import prompts, refine
+from .generation import imagegen, prompts, refine
 from .generation import script as script_gen
 from .ingestion.pipeline import ingest_source
-from .llm.base import LLMProvider
+from .llm.base import LLMError, LLMProvider
 from .llm.factory import require_llm
+from .llm.parse import complete_json
 from .models import (
     ContentFeedback,
+    ContentImage,
     ContentItem,
     ContentRun,
     ContentStatus,
@@ -139,9 +141,111 @@ def _agent_guidance(session: Session, profile: CreatorProfile, *, extra: str = "
 
 # ---- Generation ----
 
-def _image_prompt(llm: LLMProvider, title: str, angle: str, post_text: str) -> str:
+def _image_brief(llm: LLMProvider, title: str, angle: str, post_text: str) -> dict:
+    """The visual brief: a text-free render prompt plus the headline to composite on top."""
     system, prompt = prompts.image_prompt(title, angle, post_text)
-    return llm.complete(prompt, system=system).strip()
+    try:
+        data = complete_json(llm, prompt, system=system)
+        if not isinstance(data, dict):
+            raise ValueError("image brief was not a JSON object")
+    except (ValueError, LLMError) as exc:
+        log.info("image brief fell back to a default prompt: %s", exc)
+        data = {}
+
+    render = str(data.get("render_prompt") or "").strip()
+    if not render:
+        render = (
+            f"Premium B2B tech visual for a LinkedIn post about \"{title}\": abstract glowing "
+            "line-art pipeline and dashboard shapes on a deep navy #0A1F35 background, one "
+            "orange #E67E22 focal accent, cinematic soft light, generous negative space in the "
+            "lower third. No text, no letters, no numbers, no logos, no watermarks."
+        )
+    overlay = str(data.get("overlay_text") or "").strip()
+    accent = str(data.get("accent_word") or "").strip()
+    words = overlay.split()
+    if accent and accent.lower() not in [w.strip(".,:;!?").lower() for w in words]:
+        accent = words[-1] if words else ""
+    return {"render_prompt": render, "overlay_text": overlay, "accent_word": accent}
+
+
+# ---- Post image (free text-to-image model) ----
+
+def get_image(session: Session, item_id: int) -> ContentImage | None:
+    return session.get(ContentImage, item_id)
+
+
+def render_image(
+    session: Session,
+    item_id: int,
+    *,
+    prompt: str | None = None,
+    overlay_text: str | None = None,
+    accent_word: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+) -> ContentImage:
+    """Render (or re-render) an item's post image with a free model and store the bytes.
+
+    Never raises on a provider failure: the row is saved with status="error" and the message,
+    so the UI can show what went wrong and offer a retry.
+    """
+    item = _require_item(session, item_id)
+    settings = get_settings()
+    row = session.get(ContentImage, item_id) or ContentImage(item_id=item_id)
+
+    row.prompt = (prompt or row.prompt or item.thumbnail_prompt or "").strip()
+    if overlay_text is not None:
+        row.overlay_text = overlay_text.strip()
+    if accent_word is not None:
+        row.accent_word = accent_word.strip()
+    # The LinkedIn target size. Free endpoints ignore it to varying degrees (Cloudflare is a
+    # fixed 1024 square, Pollinations' anonymous tier caps at 768), so the UI cover-crops the
+    # returned bitmap to exactly this — which is what gets downloaded.
+    row.width = width or row.width or settings.image_width
+    row.height = height or row.height or settings.image_height
+    row.updated_at = datetime.utcnow()
+
+    try:
+        img = imagegen.generate(row.prompt, width=row.width, height=row.height)
+        row.data = img.data
+        row.bytes_len = len(img.data)
+        row.mime = img.mime
+        row.provider = img.provider
+        row.model = img.model
+        row.status = "ready"
+        row.error = ""
+    except imagegen.ImageGenError as exc:
+        row.status = "error"
+        row.error = str(exc)[:800]
+        log.warning("post image failed for item %s: %s", item_id, exc)
+
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def _attach_image(
+    session: Session, item: ContentItem, brief: dict, *, on_progress: Callable[[str], None] = _noop
+) -> None:
+    """Persist the visual brief for an item, then render it if image generation is on."""
+    settings = get_settings()
+    row = ContentImage(
+        item_id=item.id,
+        prompt=brief["render_prompt"],
+        overlay_text=brief["overlay_text"],
+        accent_word=brief["accent_word"],
+        width=settings.image_width,
+        height=settings.image_height,
+        status="pending" if settings.image_gen_enabled else "error",
+        error="" if settings.image_gen_enabled else "image generation disabled",
+    )
+    session.add(row)
+    session.commit()
+    if not settings.image_gen_enabled or settings.image_provider == "none":
+        return
+    on_progress("rendering post image")
+    render_image(session, item.id)
 
 
 def _generate_one(
@@ -183,8 +287,8 @@ def _generate_one(
         cta=(profile.offer or None),
         llm=llm,
     )
-    on_progress("writing image prompt")
-    thumb = _image_prompt(llm, title, angle, doc["markdown"])
+    on_progress("writing image brief")
+    brief = _image_brief(llm, title, angle, doc["markdown"])
 
     item = ContentItem(
         batch_id=batch_id,
@@ -194,7 +298,7 @@ def _generate_one(
         format=idea.get("format", "other"),
         script_markdown=doc["markdown"],
         description=desc,
-        thumbnail_prompt=thumb,
+        thumbnail_prompt=brief["render_prompt"],
         evidence=[str(e) for e in (idea.get("evidence") or [])],
         sections=doc["sections"],
         predicted_score=idea.get("virality_score"),
@@ -207,6 +311,7 @@ def _generate_one(
     session.add(item)
     session.commit()
     session.refresh(item)
+    _attach_image(session, item, brief, on_progress=on_progress)
     return item
 
 

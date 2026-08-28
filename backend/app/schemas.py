@@ -76,6 +76,32 @@ class LLMStatus(BaseModel):
 
 # ---- Agentic content engine ----
 
+class ContentImageRead(BaseModel):
+    """Image metadata (never the bytes — those come from GET /content/{id}/image)."""
+    item_id: int
+    status: str
+    provider: str
+    model: str
+    prompt: str
+    overlay_text: str
+    accent_word: str
+    mime: str
+    width: int
+    height: int
+    bytes_len: int
+    error: str
+    updated_at: datetime
+
+
+class ImageGenerateRequest(BaseModel):
+    """Optional overrides when (re)rendering a post image."""
+    prompt: str | None = None
+    overlay_text: str | None = None
+    accent_word: str | None = None
+    width: int | None = None
+    height: int | None = None
+
+
 class ContentItemRead(BaseModel):
     id: int
     batch_id: str
@@ -104,6 +130,7 @@ class ContentItemRead(BaseModel):
     reward: float | None
     created_at: datetime
     updated_at: datetime
+    image: ContentImageRead | None = None
 
 
 class ContentRunRead(BaseModel):

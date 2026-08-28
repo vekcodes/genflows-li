@@ -9,20 +9,22 @@ from __future__ import annotations
 import threading
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
 from .. import agent
 from ..config import get_settings
 from ..db import engine, get_session
 from ..llm.base import LLMError
-from ..models import ContentItem, ContentRun, ContentStatus, IngestStatus
+from ..models import ContentImage, ContentItem, ContentRun, ContentStatus, IngestStatus
 from ..schemas import (
+    ContentImageRead,
     ContentItemRead,
     ContentRunRead,
     CreatorProfileRead,
     CreatorProfileUpdate,
     DeclineRequest,
+    ImageGenerateRequest,
     PublishRequest,
     ScheduleRequest,
 )
@@ -42,12 +44,29 @@ def _run_llm(fn):
 # ---- Queue / calendar ----
 
 
+def _with_images(session: Session, items: list[ContentItem]) -> list[ContentItemRead]:
+    """Item payloads plus their image metadata (one query for the batch, never the bytes)."""
+    ids = [i.id for i in items if i.id is not None]
+    images: dict[int, ContentImage] = {}
+    if ids:
+        rows = session.exec(select(ContentImage).where(ContentImage.item_id.in_(ids))).all()
+        images = {r.item_id: r for r in rows}
+    out: list[ContentItemRead] = []
+    for item in items:
+        read = ContentItemRead.model_validate(item, from_attributes=True)
+        row = images.get(item.id)
+        if row is not None:
+            read.image = ContentImageRead.model_validate(row, from_attributes=True)
+        out.append(read)
+    return out
+
+
 @router.get("/queue", response_model=list[ContentItemRead])
 def queue(status: ContentStatus | None = None, session: Session = Depends(get_session)):
     q = select(ContentItem).order_by(ContentItem.created_at.desc())
     if status is not None:
         q = q.where(ContentItem.status == status)
-    return list(session.exec(q).all())
+    return _with_images(session, list(session.exec(q).all()))
 
 
 # ---- Generation (async batch) ----
@@ -174,6 +193,48 @@ def update_profile(body: CreatorProfileUpdate, session: Session = Depends(get_se
     return profile
 
 
+# ---- Post image (rendered by a free text-to-image model) ----
+
+
+@router.get("/{item_id}/image", response_class=Response)
+def get_item_image(item_id: int, session: Session = Depends(get_session)):
+    """The raw image bytes, ready to attach to a LinkedIn post."""
+    row = session.get(ContentImage, item_id)
+    if row is None or not row.data:
+        raise HTTPException(404, row.error if row and row.error else "no image for this item")
+    return Response(
+        content=bytes(row.data),
+        media_type=row.mime or "image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="linkedin-post-{item_id}.'
+                                   f'{"jpg" if "jpeg" in (row.mime or "") else "png"}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+@router.post("/{item_id}/image", response_model=ContentImageRead)
+def generate_item_image(
+    item_id: int,
+    body: ImageGenerateRequest | None = None,
+    session: Session = Depends(get_session),
+):
+    """(Re)render the post image. Optional overrides let the user tweak prompt or headline."""
+    body = body or ImageGenerateRequest()
+    row = agent.render_image(
+        session,
+        item_id,
+        prompt=body.prompt,
+        overlay_text=body.overlay_text,
+        accent_word=body.accent_word,
+        width=body.width,
+        height=body.height,
+    )
+    if row.status == "error":
+        raise HTTPException(502, row.error or "image generation failed")
+    return row
+
+
 # ---- Single item (parameterized — registered AFTER literal routes like /profile, /runs) ----
 
 
@@ -182,4 +243,4 @@ def get_item(item_id: int, session: Session = Depends(get_session)):
     item = session.get(ContentItem, item_id)
     if item is None:
         raise HTTPException(404, "content item not found")
-    return item
+    return _with_images(session, [item])[0]

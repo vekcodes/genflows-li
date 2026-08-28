@@ -47,6 +47,19 @@ Vercel auto-detects Vite. In **Project Settings → Environment Variables**, add
 | `BRAIN_API_KEY` | a random string (locks the API; the SPA sends it) |
 | `CRON_SECRET` | a random string (Vercel sends it to your cron endpoints) |
 
+Post images generate with **no key at all** (Pollinations' free tier). Add any *one* of these
+free credentials to get FLUX-grade quality instead:
+
+| Key | Value |
+|---|---|
+| `BRAIN_CLOUDFLARE_ACCOUNT_ID` + `BRAIN_CLOUDFLARE_API_TOKEN` | Workers AI free daily allowance → FLUX.1-schnell (**recommended** — verified free, no card, ~500 images/day) |
+| `BRAIN_TOGETHER_API_KEY` | api.together.xyz → FLUX.1-schnell-Free. As of 2026-08 signup asks for payment first, so treat as paid |
+| `BRAIN_HUGGINGFACE_API_KEY` | free HF token → FLUX.1-schnell |
+| `BRAIN_POLLINATIONS_TOKEN` | free token from auth.pollinations.ai → unlocks FLUX on Pollinations |
+
+Turn image rendering off entirely with `BRAIN_IMAGE_GEN_ENABLED=false` (each image adds ~10-30s
+to a generation run, which matters inside the 300s function limit).
+
 `BRAIN_SERVERLESS` is set automatically (Vercel sets `VERCEL=1`). `VITE_API_BASE_URL=/` is baked
 in by `vercel.json`, so the SPA calls its own origin — no extra config.
 

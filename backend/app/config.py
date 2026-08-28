@@ -71,6 +71,27 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
 
+    # --- Post image generation (free models) ---
+    # Turns the generated image prompt into a real, LinkedIn-ready PNG/JPEG.
+    # "auto" picks the best provider whose key is present, and falls back to
+    # Pollinations (FLUX, free, no API key at all) so this works out of the box.
+    image_gen_enabled: bool = True
+    image_provider: Literal[
+        "auto", "pollinations", "together", "cloudflare", "huggingface", "none"
+    ] = "auto"
+    image_model: str = ""              # blank = that provider's default free FLUX model
+    image_width: int = 1200            # LinkedIn single-image square post
+    image_height: int = 1200
+    image_timeout_sec: int = 180
+    image_max_retries: int = 2
+    # Optional free-tier credentials. Any ONE of these upgrades output from the keyless
+    # fallback (Pollinations' anonymous tier: SANA at 768px) to real FLUX at full size.
+    together_api_key: str | None = None          # api.together.xyz — FLUX.1-schnell-Free
+    cloudflare_account_id: str | None = None     # Workers AI free daily allowance
+    cloudflare_api_token: str | None = None
+    huggingface_api_key: str | None = None
+    pollinations_token: str | None = None        # free token unlocks FLUX on Pollinations
+
     # --- Virality model cache ---
     virality_cache_ttl_sec: int = 600
 
